@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft, CheckCircle, RotateCw } from 'lucide-react';
+import { ArrowLeft, CheckCircle, RotateCw, Sparkles } from 'lucide-react';
 
 export const OtpVerifyScreen: React.FC = () => {
   const location = useLocation();
@@ -9,18 +9,14 @@ export const OtpVerifyScreen: React.FC = () => {
   const { verifyOtpAndLogin, requestOtp } = useAuth();
 
   const phone = (location.state as any)?.phone || '';
+  const demoOtp = (location.state as any)?.demoOtp || '1234';
 
   const [otp, setOtp] = useState(['', '', '', '']);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendTimer, setResendTimer] = useState(30);
 
-  const inputRefs = [
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-  ];
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
     if (!phone) {
@@ -28,7 +24,7 @@ export const OtpVerifyScreen: React.FC = () => {
       return;
     }
 
-    inputRefs[0].current?.focus();
+    inputRefs.current[0]?.focus();
 
     const interval = setInterval(() => {
       setResendTimer((prev) => (prev > 0 ? prev - 1 : 0));
@@ -38,21 +34,63 @@ export const OtpVerifyScreen: React.FC = () => {
   }, [phone, navigate]);
 
   const handleChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
+    const cleanDigits = value.replace(/\D/g, '');
+
+    if (!cleanDigits) {
+      const newOtp = [...otp];
+      newOtp[index] = '';
+      setOtp(newOtp);
+      return;
+    }
+
+    if (cleanDigits.length > 1) {
+      const newOtp = [...otp];
+      const chars = cleanDigits.slice(0, 4).split('');
+      chars.forEach((c, i) => {
+        if (index + i < 4) {
+          newOtp[index + i] = c;
+        }
+      });
+      setOtp(newOtp);
+      const nextFocus = Math.min(index + chars.length, 3);
+      inputRefs.current[nextFocus]?.focus();
+      return;
+    }
 
     const newOtp = [...otp];
-    newOtp[index] = value.slice(-1);
+    newOtp[index] = cleanDigits.slice(-1);
     setOtp(newOtp);
 
-    if (value && index < 3) {
-      inputRefs[index + 1].current?.focus();
+    if (index < 3) {
+      inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      inputRefs[index - 1].current?.focus();
+      inputRefs.current[index - 1]?.focus();
     }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
+    if (pasted) {
+      const newOtp = ['', '', '', ''];
+      pasted.split('').forEach((d, i) => {
+        newOtp[i] = d;
+      });
+      setOtp(newOtp);
+      const targetFocus = Math.min(pasted.length, 3);
+      inputRefs.current[targetFocus]?.focus();
+    }
+  };
+
+  const handleAutoFillDemo = () => {
+    const digits = (demoOtp || '1234').split('').slice(0, 4);
+    setOtp(digits);
+    setError(null);
+    inputRefs.current[3]?.focus();
   };
 
   const handleVerify = async (e?: React.FormEvent) => {
@@ -69,12 +107,13 @@ export const OtpVerifyScreen: React.FC = () => {
 
     try {
       const res = await verifyOtpAndLogin(phone, fullOtp);
-      if (res.isNewUser || !res.isProfileCompleted) {
+      if (!res.user?.isProfileCompleted || res.isNewUser) {
         navigate('/onboarding', { replace: true });
       } else {
         navigate('/', { replace: true });
       }
     } catch (err: any) {
+      console.error('OTP verification error:', err);
       setError(err.response?.data?.message || err.message || 'Invalid OTP. Please check and try again.');
     } finally {
       setIsSubmitting(false);
@@ -87,24 +126,23 @@ export const OtpVerifyScreen: React.FC = () => {
       await requestOtp(phone);
       setResendTimer(30);
       setError(null);
-    } catch (err: any) {
+    } catch {
       setError('Failed to resend OTP.');
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-between max-w-md mx-auto p-5 shadow-2xl">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between max-w-md mx-auto p-5 shadow-2xl">
       <div className="pt-4">
-        {/* Back button */}
         <button
           onClick={() => navigate('/login')}
-          className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-slate-100 transition shadow-2xs"
+          className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition shadow-2xs"
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
 
         <div className="mt-6">
-          <h2 className="text-2xl font-extrabold text-slate-900">Verify your number</h2>
+          <h2 className="text-2xl font-black text-slate-900">Verify Mobile OTP</h2>
           <p className="text-xs text-slate-500 mt-1">
             Enter the 4-digit code sent to <span className="font-bold text-slate-800">{phone}</span>
           </p>
@@ -116,19 +154,38 @@ export const OtpVerifyScreen: React.FC = () => {
             {otp.map((digit, idx) => (
               <input
                 key={idx}
-                ref={inputRefs[idx]}
+                ref={(el) => {
+                  inputRefs.current[idx] = el;
+                }}
                 type="text"
                 inputMode="numeric"
-                maxLength={1}
+                pattern="[0-9]*"
+                maxLength={idx === 0 ? 4 : 1}
                 value={digit}
                 onChange={(e) => handleChange(idx, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(idx, e)}
+                onPaste={handlePaste}
                 className="w-14 h-16 text-center text-2xl font-extrabold text-slate-900 bg-white border border-slate-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 rounded-2xl outline-none shadow-2xs transition"
               />
             ))}
           </div>
 
-          {error && <p className="text-xs text-rose-600 font-semibold text-center">{error}</p>}
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={handleAutoFillDemo}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Auto-fill Demo Code: {demoOtp || '1234'}</span>
+            </button>
+          </div>
+
+          {error && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl">
+              <p className="text-xs text-rose-600 font-semibold text-center">{error}</p>
+            </div>
+          )}
 
           <button
             type="submit"
