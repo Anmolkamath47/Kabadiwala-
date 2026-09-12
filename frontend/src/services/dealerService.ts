@@ -1,6 +1,7 @@
 import axios from 'axios';
 import api from './api';
 import { Dealer, ScrapCategory, CategoryCardInfo, ScrapRateItem } from '../types';
+import { reconcileCityCoordinates } from '../utils/geoUtils';
 
 // Standard verified scrap rate catalogue
 const DEFAULT_SCRAP_RATES: ScrapRateItem[] = [
@@ -89,7 +90,12 @@ export const dealerService = {
     // --- Tier 1: Try Primary Consumer Backend ---
     try {
       const res = await api.get('/dealers/nearby', { params, timeout: 3500 });
-      if (res.data?.data && Array.isArray(res.data.data.dealers)) {
+      if (
+        res.data &&
+        typeof res.data === 'object' &&
+        res.data.data &&
+        Array.isArray(res.data.data.dealers)
+      ) {
         return res.data.data;
       }
     } catch (err: any) {
@@ -225,17 +231,17 @@ export const dealerService = {
       },
       {
         dealerId: 'DLR-BLR-001',
-        businessName: 'Bangalore Green Scrap Hub',
-        contactPerson: 'Arjun Kachrewala',
+        businessName: 'GreenEarth Scrap Hub',
+        contactPerson: 'Partner Dealer',
         phone: '+91 98860 12345',
-        rating: 4.8,
-        totalRatings: 68,
+        rating: 4.9,
+        totalRatings: 142,
         isAvailable: true,
         isOnline: true,
         isBusy: false,
         location: { coordinates: [77.5058, 13.04314] as [number, number] },
-        address: 'Chokkasandra, Peenya Industrial Area, Bengaluru - 560057',
-        vehicleType: '3-Wheeler Auto Loader',
+        address: 'Chokkasandra, Bengaluru, 560057',
+        vehicleType: 'Tata Ace Mini Truck',
         scrapRates: DEFAULT_SCRAP_RATES,
       },
     ];
@@ -248,19 +254,23 @@ export const dealerService = {
           const parsed = JSON.parse(cachedDealer);
           if (parsed && parsed.dealerId && parsed.isOnline) {
             const existingIdx = baseDealers.findIndex((d) => d.dealerId === parsed.dealerId);
+            const dynamicCoords = reconcileCityCoordinates(
+              parsed.location?.address,
+              parsed.location?.coordinates || [lng, lat]
+            );
             const dynamicDealer = {
               dealerId: parsed.dealerId,
-              businessName: parsed.businessName || 'Live Partner Scrap Hub',
-              contactPerson: parsed.contactPerson || 'Active Partner',
-              phone: parsed.phone || '+91 98765 00000',
-              rating: parsed.rating || 5.0,
-              totalRatings: parsed.totalRatings || 1,
+              businessName: parsed.businessName || 'GreenEarth Scrap Hub',
+              contactPerson: parsed.contactPerson || 'Partner Dealer',
+              phone: parsed.phone || '+91 98860 12345',
+              rating: parsed.rating || 4.9,
+              totalRatings: parsed.totalRatings || 142,
               isAvailable: parsed.isOnline ?? true,
               isOnline: parsed.isOnline ?? true,
               isBusy: parsed.isBusy ?? false,
-              location: { coordinates: parsed.location?.coordinates || [lng, lat] as [number, number] },
-              address: parsed.location?.address || 'Live Partner Location',
-              vehicleType: parsed.vehicleType || 'Electric Scrap Loader',
+              location: { coordinates: dynamicCoords as [number, number] },
+              address: parsed.location?.address || 'Chokkasandra, Bengaluru, 560057',
+              vehicleType: parsed.vehicleType || 'Tata Ace Mini Truck',
               scrapRates: parsed.scrapRates && parsed.scrapRates.length > 0 ? parsed.scrapRates : DEFAULT_SCRAP_RATES,
             };
             if (existingIdx >= 0) {

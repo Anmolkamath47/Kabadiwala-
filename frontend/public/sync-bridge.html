@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kabadiwala Cross-Origin Realtime Bridge</title>
+</head>
+<body>
+  <script>
+    // Listen for cross-origin sync events from Partner Dealer app
+    window.addEventListener('message', function(event) {
+      if (!event.data || typeof event.data !== 'object') return;
+      
+      const payload = event.data;
+      if (payload.type === 'KABADI_PARTNER_SYNC') {
+        const dealer = payload.dealer;
+        if (dealer) {
+          try {
+            // 1. Store partner dealer session directly in consumer origin localStorage
+            localStorage.setItem('kabadidealer_dealer', JSON.stringify(dealer));
+            
+            // 2. Broadcast to all active consumer app tabs on this origin
+            if (typeof BroadcastChannel !== 'undefined') {
+              const channel = new BroadcastChannel('kabadiwala_cross_app_sync');
+              channel.postMessage({
+                type: 'DEALER_SYNC_UPDATE',
+                dealer: dealer,
+                timestamp: Date.now(),
+              });
+              channel.close();
+            }
+          } catch (err) {
+            console.warn('[SyncBridge] Failed to process sync payload:', err);
+          }
+        }
+      }
+    });
+
+    // Notify parent window that bridge is ready
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'KABADI_BRIDGE_READY' }, '*');
+    }
+  </script>
+</body>
+</html>

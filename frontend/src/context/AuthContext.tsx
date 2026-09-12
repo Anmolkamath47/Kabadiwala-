@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, SavedAddress } from '../types';
 import { authService } from '../services/authService';
 import { socketService } from '../services/socketService';
+import { reconcileCityCoordinates } from '../utils/geoUtils';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -37,9 +38,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedLocation, setSelectedLocation] = useState<SavedAddress | null>(() => {
     const saved = localStorage.getItem('kabadiwala_pickup_location');
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed?.address) {
+          const healed = reconcileCityCoordinates(parsed.address, parsed.coordinates);
+          if (
+            !parsed.coordinates ||
+            parsed.coordinates[0] !== healed[0] ||
+            parsed.coordinates[1] !== healed[1]
+          ) {
+            parsed.coordinates = healed;
+            localStorage.setItem('kabadiwala_pickup_location', JSON.stringify(parsed));
+          }
+          return parsed;
+        }
+      } catch {}
+    }
     if (user?.savedLocations && user.savedLocations.length > 0) {
-      return user.savedLocations.find((l) => l.isDefault) || user.savedLocations[0];
+      const def = user.savedLocations.find((l) => l.isDefault) || user.savedLocations[0];
+      const healed = reconcileCityCoordinates(def.address, def.coordinates);
+      return { ...def, coordinates: healed };
     }
     // Default Delhi location
     return {
@@ -62,8 +81,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (!selectedLocation && profile.savedLocations && profile.savedLocations.length > 0) {
             const defLoc = profile.savedLocations.find((l) => l.isDefault) || profile.savedLocations[0];
-            setSelectedLocation(defLoc);
-            localStorage.setItem('kabadiwala_pickup_location', JSON.stringify(defLoc));
+            const healed = reconcileCityCoordinates(defLoc.address, defLoc.coordinates);
+            const healedLoc = { ...defLoc, coordinates: healed };
+            setSelectedLocation(healedLoc);
+            localStorage.setItem('kabadiwala_pickup_location', JSON.stringify(healedLoc));
           }
         } catch (error: any) {
           // Only logout if the server explicitly tells us the token is invalid/expired
@@ -84,9 +105,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const handleSetSelectedLocation = (loc: SavedAddress | null) => {
-    setSelectedLocation(loc);
-    if (loc) {
-      localStorage.setItem('kabadiwala_pickup_location', JSON.stringify(loc));
+    let finalLoc = loc;
+    if (finalLoc && finalLoc.address) {
+      const healed = reconcileCityCoordinates(finalLoc.address, finalLoc.coordinates);
+      finalLoc = { ...finalLoc, coordinates: healed };
+    }
+    setSelectedLocation(finalLoc);
+    if (finalLoc) {
+      localStorage.setItem('kabadiwala_pickup_location', JSON.stringify(finalLoc));
     } else {
       localStorage.removeItem('kabadiwala_pickup_location');
     }

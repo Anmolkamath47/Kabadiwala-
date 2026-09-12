@@ -5,6 +5,7 @@ import { useOrder } from '../context/OrderContext';
 import { dealerService } from '../services/dealerService';
 import { socketService } from '../services/socketService';
 import { Dealer, ScrapCategory, SavedAddress } from '../types';
+import { reconcileCityCoordinates } from '../utils/geoUtils';
 import { AppHeader } from '../components/layout/AppHeader';
 import { BottomNav } from '../components/layout/BottomNav';
 import { DealerCard } from '../components/dealer/DealerCard';
@@ -60,7 +61,8 @@ export const HomeScreen: React.FC = () => {
     async (showSpinner: boolean = true) => {
       if (showSpinner) setIsLoading(true);
       try {
-        const [lng, lat] = selectedLocation?.coordinates || [77.2150, 28.6250];
+        const rawCoords = selectedLocation?.coordinates || [77.2150, 28.6250];
+        const [lng, lat] = reconcileCityCoordinates(selectedLocation?.address, rawCoords);
         const categoryParam = selectedCategory === 'ALL' ? undefined : selectedCategory;
 
         // 1. Fetch dealers within current search radius

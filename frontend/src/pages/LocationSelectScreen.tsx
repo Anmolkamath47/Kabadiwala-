@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LocationPickerMap } from '../components/map/LocationPickerMap';
 import { SavedAddress } from '../types';
+import { reconcileCityCoordinates } from '../utils/geoUtils';
 import {
   ArrowLeft,
   MapPin,
@@ -54,11 +55,12 @@ export const LocationSelectScreen: React.FC = () => {
 
   const handleSaveAndConfirm = async () => {
     setIsSaving(true);
+    const healedCoords = reconcileCityCoordinates(addressText, coords);
     const newAddress: SavedAddress = {
       label,
       address: addressText,
       landmark: landmark || undefined,
-      coordinates: coords,
+      coordinates: healedCoords,
       isDefault: true,
     };
 
@@ -131,7 +133,14 @@ export const LocationSelectScreen: React.FC = () => {
             <input
               type="text"
               value={addressText}
-              onChange={(e) => setAddressText(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setAddressText(val);
+                const healed = reconcileCityCoordinates(val, coords);
+                if (healed[0] !== coords[0] || healed[1] !== coords[1]) {
+                  setCoords(healed);
+                }
+              }}
               placeholder="e.g. Flat 304, Green Heights, Sector 14"
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:border-emerald-600 focus:bg-white rounded-xl text-xs font-semibold text-slate-900 outline-none transition"
             />
