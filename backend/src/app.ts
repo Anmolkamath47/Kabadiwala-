@@ -14,17 +14,22 @@ import { notFoundHandler, globalErrorHandler } from './middleware/errorMiddlewar
 const app = express();
 
 // Security headers
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
 // CORS config
 app.use(
   cors({
-    origin: '*', // Allow consumer web app & dealer app origins
+    origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-dealer-api-key', 'x-internal-key'],
   })
 );
+app.options('*', cors());
 
 // Body Parsers
 app.use(express.json({ limit: '10mb' }));
