@@ -1,6 +1,28 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const resolveApiBaseUrl = (): string => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (typeof window !== 'undefined' && window.location) {
+    const currentHost = window.location.hostname;
+    if (currentHost && currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
+      if (envUrl) {
+        try {
+          const parsed = new URL(envUrl);
+          if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+            parsed.hostname = currentHost;
+            return parsed.toString().replace(/\/$/, '');
+          }
+        } catch {
+          // fallback
+        }
+      }
+      return `http://${currentHost}:5000/api`;
+    }
+  }
+  return envUrl || 'http://localhost:5000/api';
+};
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -47,6 +69,16 @@ api.interceptors.response.use(
         }
       }
     }
+
+    // User-friendly network/timeout message when backend is unreachable
+    if (!error.response) {
+      if (error.code === 'ECONNABORTED' || error.message?.toLowerCase().includes('timeout')) {
+        error.message = 'Backend is taking too long to respond. Please ensure the backend server is running on port 5000 and try again.';
+      } else {
+        error.message = 'Unable to reach Kabadiwala backend (port 5000). Please check if the backend server is running.';
+      }
+    }
+
     return Promise.reject(error);
   }
 );

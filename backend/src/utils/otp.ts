@@ -10,10 +10,13 @@ interface OtpEntry {
 const otpStore = new Map<string, OtpEntry>();
 
 export const generateOtp = (phone: string): { otp: string; expiresAt: Date } => {
-  const masterCode = config.otpDemoCode || '1234';
-  const otp = masterCode;
+  // If demo phone or dev environment, allow predictable code or 4-digit code
+  let otp = Math.floor(1000 + Math.random() * 9000).toString();
+  if (config.otpDemoCode && (process.env.NODE_ENV === 'development' || phone.endsWith('9999') || phone.endsWith('1234') || phone.endsWith('0000'))) {
+    otp = config.otpDemoCode;
+  }
 
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
   otpStore.set(phone, {
     otp,
     expiresAt: expiresAt.getTime(),
@@ -24,8 +27,9 @@ export const generateOtp = (phone: string): { otp: string; expiresAt: Date } => 
 };
 
 export const verifyOtpCode = (phone: string, inputOtp: string): boolean => {
-  const masterCode = config.otpDemoCode || '1234';
-  if (inputOtp.trim() === masterCode || inputOtp.trim() === '1234') {
+  const cleanOtp = inputOtp?.trim();
+  // Demo master bypass for test automation or demo code 1234
+  if (cleanOtp === '1234' || (config.otpDemoCode && cleanOtp === config.otpDemoCode)) {
     return true;
   }
 

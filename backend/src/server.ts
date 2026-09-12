@@ -13,8 +13,8 @@ const startServer = async () => {
     const httpServer = createServer(app);
     initSocketServer(httpServer);
 
-    // 3. Start listening
-    httpServer.listen(config.port, () => {
+    // 3. Start listening on all interfaces (0.0.0.0)
+    httpServer.listen(config.port, '0.0.0.0', () => {
       console.log(`
 ╔═══════════════════════════════════════════════════════════════════╗
 ║                                                                   ║
