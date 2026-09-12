@@ -22,6 +22,7 @@ interface AuthContextType {
   addSavedAddress: (addr: any) => Promise<void>;
   deleteSavedAddress: (locationId: string) => Promise<void>;
   setDefaultAddress: (locationId: string) => Promise<void>;
+  detectCurrentLocation: () => Promise<SavedAddress | null>;
   logout: () => void;
 }
 
@@ -187,6 +188,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const detectCurrentLocation = async (): Promise<SavedAddress | null> => {
+    if (typeof window === 'undefined' || !navigator.geolocation) return null;
+
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = Math.round(position.coords.latitude * 100000) / 100000;
+          const lng = Math.round(position.coords.longitude * 100000) / 100000;
+
+          let addressName = `Current Location (${lat.toFixed(3)}, ${lng.toFixed(3)})`;
+          try {
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+              { headers: { 'Accept-Language': 'en' } }
+            );
+            const data = await res.json();
+            if (data?.address) {
+              const locality = data.address.suburb || data.address.neighbourhood || data.address.city_district || data.address.city || '';
+              const city = data.address.city || data.address.town || data.address.state || '';
+              const parts = [locality, city].filter(Boolean);
+              if (parts.length > 0) addressName = parts.join(', ');
+            }
+          } catch {
+            // Ignored
+          }
+
+          const gpsAddress: SavedAddress = {
+            label: 'Home',
+            address: addressName,
+            coordinates: [lng, lat],
+            isDefault: true,
+          };
+          handleSetSelectedLocation(gpsAddress);
+          resolve(gpsAddress);
+        },
+        () => resolve(null),
+        { timeout: 8000, enableHighAccuracy: true }
+      );
+    });
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -211,6 +253,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addSavedAddress,
         deleteSavedAddress,
         setDefaultAddress,
+        detectCurrentLocation,
         logout,
       }}
     >

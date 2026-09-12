@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOrder } from '../context/OrderContext';
 import { dealerService } from '../services/dealerService';
-import { Dealer, ScrapCategory } from '../types';
+import { socketService } from '../services/socketService';
+import { Dealer, ScrapCategory, SavedAddress } from '../types';
 import { AppHeader } from '../components/layout/AppHeader';
 import { BottomNav } from '../components/layout/BottomNav';
 import { DealerCard } from '../components/dealer/DealerCard';
@@ -19,19 +20,29 @@ import {
   ShieldCheck,
   IndianRupee,
   Navigation,
+  Compass,
+  MapPin,
+  Radio,
+  ExternalLink,
 } from 'lucide-react';
 
 export const HomeScreen: React.FC = () => {
   const navigate = useNavigate();
-  const { selectedLocation } = useAuth();
+  const { selectedLocation, setSelectedLocation, detectCurrentLocation } = useAuth();
   const { activeOrder } = useOrder();
 
   const [dealers, setDealers] = useState<Dealer[]>([]);
+  const [otherAreaDealers, setOtherAreaDealers] = useState<Dealer[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isDetectingGps, setIsDetectingGps] = useState<boolean>(false);
+  const [searchRadius, setSearchRadius] = useState<number>(15);
   const [selectedCategory, setSelectedCategory] = useState<ScrapCategory | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedDealerForModal, setSelectedDealerForModal] = useState<Dealer | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [lastUpdatedTime, setLastUpdatedTime] = useState<Date>(new Date());
+
+  const isMountedRef = useRef<boolean>(true);
 
   const categories: Array<{ id: ScrapCategory | 'ALL'; name: string; icon: string }> = [
     { id: 'ALL', name: 'All Scrap', icon: '♻️' },
@@ -45,23 +56,120 @@ export const HomeScreen: React.FC = () => {
     { id: 'Glass', name: 'Bottles', icon: '🍾' },
   ];
 
-  const fetchDealers = async () => {
-    setIsLoading(true);
+  const fetchDealers = useCallback(
+    async (showSpinner: boolean = true) => {
+      if (showSpinner) setIsLoading(true);
+      try {
+        const [lng, lat] = selectedLocation?.coordinates || [77.2150, 28.6250];
+        const categoryParam = selectedCategory === 'ALL' ? undefined : selectedCategory;
+
+        // 1. Fetch dealers within current search radius
+        const data = await dealerService.getNearbyDealers(lat, lng, searchRadius, categoryParam);
+        if (isMountedRef.current) {
+          setDealers(data.dealers || []);
+          setLastUpdatedTime(new Date());
+
+          // 2. If no dealers within radius, check if active dealers exist in other cities
+          if ((!data.dealers || data.dealers.length === 0) && searchRadius <= 25) {
+            const allActive = await dealerService.getAllActiveDealers(lat, lng);
+            if (isMountedRef.current) {
+              setOtherAreaDealers(allActive.dealers || []);
+            }
+          } else {
+            setOtherAreaDealers([]);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch dealers:', err);
+      } finally {
+        if (isMountedRef.current && showSpinner) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [selectedLocation, selectedCategory, searchRadius]
+  );
+
+  // Initial & Dependency-based fetch
+  useEffect(() => {
+    isMountedRef.current = true;
+    fetchDealers(true);
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [fetchDealers]);
+
+  // Real-time Background Polling (Every 12s when tab is active)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchDealers(false);
+      }
+    }, 12000);
+    return () => clearInterval(timer);
+  }, [fetchDealers]);
+
+  // Cross-App Live Synchronization via BroadcastChannel & Storage events
+  useEffect(() => {
+    let channel: BroadcastChannel | null = null;
     try {
-      const [lng, lat] = selectedLocation?.coordinates || [77.2150, 28.6250];
-      const categoryParam = selectedCategory === 'ALL' ? undefined : selectedCategory;
-      const data = await dealerService.getNearbyDealers(lat, lng, 15, categoryParam);
-      setDealers(data.dealers || []);
-    } catch (err) {
-      console.error('Failed to fetch nearby dealers:', err);
+      channel = new BroadcastChannel('kabadiwala_cross_app_sync');
+      channel.onmessage = (event) => {
+        console.log('📡 [CrossAppSync] Received partner dealer event:', event.data);
+        fetchDealers(false);
+      };
+    } catch {
+      // Ignored if BroadcastChannel unsupported
+    }
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'kabadidealer_dealer' || e.key === 'kabadiwala_pickup_location') {
+        fetchDealers(false);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // Socket listeners for dealer online/status updates
+    const handleSocketStatus = () => fetchDealers(false);
+    socketService.on('dealer:status', handleSocketStatus);
+    socketService.on('dealer:online', handleSocketStatus);
+    socketService.on('dealer:location', handleSocketStatus);
+
+    return () => {
+      if (channel) channel.close();
+      window.removeEventListener('storage', handleStorageChange);
+      socketService.off('dealer:status', handleSocketStatus);
+      socketService.off('dealer:online', handleSocketStatus);
+      socketService.off('dealer:location', handleSocketStatus);
+    };
+  }, [fetchDealers]);
+
+  // Auto-detect GPS location handler
+  const handleDetectGPS = async () => {
+    setIsDetectingGps(true);
+    try {
+      const detected = await detectCurrentLocation();
+      if (detected) {
+        setSearchRadius(15);
+      } else {
+        alert('Could not detect GPS location. Please check browser location permissions or choose an address manually.');
+      }
     } finally {
-      setIsLoading(false);
+      setIsDetectingGps(false);
     }
   };
 
-  useEffect(() => {
-    fetchDealers();
-  }, [selectedLocation, selectedCategory]);
+  // Align location with an active dealer in another city
+  const handleAlignWithDealer = (dealer: Dealer) => {
+    const newLoc: SavedAddress = {
+      label: 'Home',
+      address: dealer.address || `${dealer.businessName} Service Area`,
+      coordinates: dealer.location.coordinates,
+      isDefault: true,
+    };
+    setSelectedLocation(newLoc);
+    setSearchRadius(15);
+  };
 
   const handleSelectDealer = (dealer: Dealer) => {
     navigate('/booking-confirm', { state: { dealer } });
@@ -72,9 +180,10 @@ export const HomeScreen: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const filteredDealers = dealers.filter((d) =>
-    d.businessName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    d.scrapRates.some((r) => r.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredDealers = dealers.filter(
+    (d) =>
+      d.businessName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.scrapRates.some((r) => r.name.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
@@ -119,55 +228,56 @@ export const HomeScreen: React.FC = () => {
             <p className="text-xs text-emerald-100 mt-1 leading-relaxed">
               Certified electronic scales · Free doorstep pickup · Instant cash or UPI payment
             </p>
-
-            {/* Quick 3 Feature Pills */}
-            <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-emerald-500/40 text-[10px] font-semibold text-emerald-100">
-              <div className="flex items-center space-x-1">
-                <Scale className="w-3.5 h-3.5 text-amber-300" />
-                <span>Exact Weight</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <Truck className="w-3.5 h-3.5 text-emerald-200" />
-                <span>Fast Arrival</span>
-              </div>
-              <div className="flex items-center space-x-1">
+            <div className="mt-3 flex items-center space-x-3 text-[11px] font-semibold text-emerald-50">
+              <span className="flex items-center space-x-1">
+                <Scale className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Zero Rigging</span>
+              </span>
+              <span>·</span>
+              <span className="flex items-center space-x-1">
+                <Truck className="w-3.5 h-3.5 text-emerald-300" />
+                <span>30-Min Pickup</span>
+              </span>
+              <span>·</span>
+              <span className="flex items-center space-x-1">
                 <IndianRupee className="w-3.5 h-3.5 text-emerald-300" />
-                <span>Best Rates</span>
-              </div>
+                <span>Spot Cash</span>
+              </span>
             </div>
           </div>
+          <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
         </div>
 
-        {/* Search Bar */}
+        {/* Search & Filter Bar */}
         <div className="relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
+            placeholder="Search by scrap name (newspaper, copper, iron)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by scrap material (e.g. Copper, Paper, Iron)..."
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 outline-none shadow-2xs transition"
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs"
           />
         </div>
 
-        {/* Category Filter Pills */}
+        {/* Scrap Categories Horizontal Pills */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
-              Scrap Categories
+            <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+              Scrap Material Rates
             </h3>
-            <span className="text-[11px] text-slate-400">Live Rates</span>
+            <span className="text-[11px] text-emerald-700 font-bold">Live Rates/kg</span>
           </div>
 
-          <div className="flex space-x-2 overflow-x-auto pb-1 no-scrollbar">
+          <div className="flex space-x-2 overflow-x-auto pb-1 no-scrollbar -mx-1 px-1">
             {categories.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${
+                className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex-shrink-0 shadow-2xs ${
                   selectedCategory === cat.id
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
+                    ? 'bg-emerald-600 text-white shadow-emerald-200'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
                 }`}
               >
                 <span>{cat.icon}</span>
@@ -177,38 +287,115 @@ export const HomeScreen: React.FC = () => {
           </div>
         </div>
 
+        {/* Radius Filter Pills (When search radius is customized) */}
+        {searchRadius > 15 && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs">
+            <div className="flex items-center space-x-1.5 text-emerald-800 font-bold">
+              <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-600" />
+              <span>Expanded View: All Active Dealers ({dealers.length} Found)</span>
+            </div>
+            <button
+              onClick={() => setSearchRadius(15)}
+              className="text-[11px] font-extrabold text-emerald-700 hover:underline bg-white px-2 py-0.5 rounded-md border border-emerald-200"
+            >
+              Reset to 15 km
+            </button>
+          </div>
+        )}
+
         {/* Nearby Active Dealers Section */}
         <div>
           <div className="flex items-center justify-between mb-2.5">
             <div>
-              <h3 className="text-sm font-black text-slate-900">Active Nearby Dealers</h3>
+              <div className="flex items-center space-x-1.5">
+                <h3 className="text-sm font-black text-slate-900">Active Nearby Dealers</h3>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              </div>
               <p className="text-[11px] text-slate-500">
-                Ready for instant scrap pickup in your area
+                {searchRadius > 25
+                  ? 'Showing all active scrap collectors across cities'
+                  : `Within ${searchRadius} km of ${selectedLocation?.label || 'your location'}`}
               </p>
             </div>
-            <button
-              onClick={fetchDealers}
-              className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 transition"
-              title="Refresh nearby dealers"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            </button>
+            <div className="flex items-center space-x-1.5">
+              <button
+                onClick={() => fetchDealers(true)}
+                className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 transition shadow-2xs"
+                title="Refresh nearby dealers"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-emerald-600' : ''}`} />
+              </button>
+            </div>
           </div>
 
           {isLoading ? (
             <div className="py-12 flex flex-col items-center justify-center space-y-2">
               <div className="w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-xs text-slate-500 font-semibold">Finding nearby scrap dealers...</p>
+              <p className="text-xs text-slate-500 font-semibold">Finding active scrap dealers...</p>
             </div>
           ) : filteredDealers.length === 0 ? (
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 text-center space-y-2 shadow-2xs">
-              <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3.5 shadow-xs text-center">
+              <div className="w-12 h-12 bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center mx-auto text-amber-600">
                 <Truck className="w-6 h-6" />
               </div>
-              <h4 className="text-sm font-bold text-slate-800">No active dealers found</h4>
-              <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                No scrap dealers are active within 15 km with the selected criteria. Try changing category or location.
-              </p>
+
+              <div>
+                <h4 className="text-sm font-black text-slate-800">
+                  No active dealers within {searchRadius} km
+                </h4>
+                <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                  Current location: <span className="font-semibold text-slate-700">{selectedLocation?.address || 'Default Area'}</span>
+                </p>
+              </div>
+
+              {/* Action Banner: Active Dealers Found in Other Cities/Areas */}
+              {otherAreaDealers.length > 0 && (
+                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-3.5 text-left space-y-2.5 shadow-2xs">
+                  <div className="flex items-center space-x-2 text-xs font-black text-emerald-900">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                    <span>Active Dealer Online: {otherAreaDealers[0].businessName}</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    Found {otherAreaDealers.length} verified scrap dealer(s) active in{' '}
+                    <span className="font-bold underline">{otherAreaDealers[0].address || 'other city'}</span>.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                    <button
+                      onClick={() => handleAlignWithDealer(otherAreaDealers[0])}
+                      className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-xs"
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span>Set Location to Dealer ({otherAreaDealers[0].distanceKm} km)</span>
+                    </button>
+                    <button
+                      onClick={() => setSearchRadius(5000)}
+                      className="py-2 px-3 bg-white hover:bg-slate-50 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1"
+                    >
+                      <span>Show All Active ({otherAreaDealers.length})</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Quick GPS Location Detection Button */}
+              <div className="pt-1 flex flex-col space-y-2">
+                <button
+                  onClick={handleDetectGPS}
+                  disabled={isDetectingGps}
+                  className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 shadow-xs disabled:opacity-50"
+                >
+                  <Compass className={`w-3.5 h-3.5 text-emerald-400 ${isDetectingGps ? 'animate-spin' : ''}`} />
+                  <span>{isDetectingGps ? 'Detecting GPS...' : 'Use My Current GPS Location'}</span>
+                </button>
+
+                <button
+                  onClick={() => setSearchRadius(5000)}
+                  className="w-full py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5"
+                >
+                  <Radio className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Expand Search Radius (Show All Cities)</span>
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">

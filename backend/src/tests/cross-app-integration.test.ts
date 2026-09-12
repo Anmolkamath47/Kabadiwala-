@@ -52,10 +52,18 @@ async function runCrossAppIntegrationTests() {
     const dealerHeaders = { Authorization: `Bearer ${dealerToken}` };
     assert(!!dealerToken, `Dealer authenticated on Kabadidealer API (${targetDealerId})`);
 
-    // Ensure Dealer is Online
+    // Ensure Dealer is Online and located at test pickup area
     await axios.patch(
       `${KABADIDEALER_API}/dealers/status`,
       { isOnline: true },
+      { headers: dealerHeaders }
+    );
+    await axios.put(
+      `${KABADIDEALER_API}/dealers/location`,
+      {
+        coordinates: [77.2150, 28.6250],
+        address: 'Plot 44, Recycling Estate, Connaught Place, New Delhi - 110001',
+      },
       { headers: dealerHeaders }
     );
 

@@ -109,6 +109,22 @@ class SocketService {
     };
   }
 
+  on(event: string, callback: (...args: any[]) => void) {
+    if (!this.socket) this.connect();
+    this.socket?.on(event, callback);
+    return () => {
+      this.socket?.off(event, callback);
+    };
+  }
+
+  off(event: string, callback?: (...args: any[]) => void) {
+    if (callback) {
+      this.socket?.off(event, callback);
+    } else {
+      this.socket?.off(event);
+    }
+  }
+
   disconnect() {
     if (this.socket) {
       this.socket.disconnect();

@@ -2,12 +2,14 @@ import { createServer } from 'http';
 import app from './app.js';
 import { config } from './config/index.js';
 import { connectDB } from './config/db.js';
+import { seedDealers } from './utils/seedData.js';
 import { initSocketServer } from './sockets/socketManager.js';
 
 const startServer = async () => {
   try {
     // 1. Connect database
     await connectDB();
+    await seedDealers();
 
     // 2. Create HTTP & Socket.IO server
     const httpServer = createServer(app);
