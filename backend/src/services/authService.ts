@@ -15,7 +15,7 @@ export class AuthService {
     return {
       message: 'OTP sent successfully to your mobile phone',
       expiresAt,
-      ...(process.env.NODE_ENV === 'development' ? { demoOtp: otp } : {}),
+      demoOtp: otp,
     };
   }
 
