@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/sync-bridge.html",
+      "destination": "/sync-bridge.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
