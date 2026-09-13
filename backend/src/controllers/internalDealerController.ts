@@ -46,6 +46,7 @@ export const DealerStatusTransitionSchema = z.object({
     )
     .optional(),
   finalTotalAmount: z.number().optional(),
+  scrapPhoto: z.string().optional(),
   dealerLocation: z
     .object({
       coordinates: z.tuple([z.number(), z.number()]),
@@ -78,13 +79,14 @@ export class InternalDealerController {
    */
   static async updateStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { orderId, status, note, finalWeights, finalTotalAmount, dealerLocation } = req.body;
+      const { orderId, status, note, finalWeights, finalTotalAmount, scrapPhoto, dealerLocation } = req.body;
 
       const order = await OrderService.transitionStatus(orderId, status, {
         updatedBy: 'DEALER',
         note,
         finalWeights,
         finalTotalAmount,
+        scrapPhoto,
         dealerLocation,
       });
 

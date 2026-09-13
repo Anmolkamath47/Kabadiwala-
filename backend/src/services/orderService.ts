@@ -181,6 +181,7 @@ export class OrderService {
       cancellationReason?: string;
       finalWeights?: FinalWeightItem[];
       finalTotalAmount?: number;
+      scrapPhoto?: string;
       dealerLocation?: any;
     } = {}
   ): Promise<IOrder> {
@@ -224,6 +225,9 @@ export class OrderService {
     }
 
     if (newStatus === 'COMPLETED') {
+      if (options.scrapPhoto) {
+        order.scrapPhoto = options.scrapPhoto;
+      }
       if (options.finalWeights && options.finalWeights.length > 0) {
         order.finalWeights = options.finalWeights;
         order.finalTotalAmount =

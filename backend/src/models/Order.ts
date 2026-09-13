@@ -29,6 +29,7 @@ export interface IOrder extends Document {
   estimatedTotalAmount: number;
   finalWeights?: FinalWeightItem[];
   finalTotalAmount?: number;
+  scrapPhoto?: string;
   status: OrderStatus;
   statusHistory: StatusHistoryEntry[];
   otp: {
@@ -145,6 +146,9 @@ const OrderSchema = new Schema<IOrder>(
     finalWeights: [FinalWeightSchema],
     finalTotalAmount: {
       type: Number,
+    },
+    scrapPhoto: {
+      type: String,
     },
     status: {
       type: String,
