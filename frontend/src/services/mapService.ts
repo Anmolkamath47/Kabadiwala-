@@ -64,6 +64,11 @@ export class LeafletMapProvider implements IMapProvider {
     zoom: number = 15,
     initialMode: MapTileMode = 'street'
   ): { map: L.Map; switchLayer: (mode: MapTileMode) => void } {
+    const el = typeof elementOrId === 'string' ? document.getElementById(elementOrId) : elementOrId;
+    if (el && (el as any)._leaflet_id) {
+      delete (el as any)._leaflet_id;
+    }
+
     const map = L.map(elementOrId, {
       zoomControl: false,
       attributionControl: false,

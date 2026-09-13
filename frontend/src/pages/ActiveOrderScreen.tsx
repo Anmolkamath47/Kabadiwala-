@@ -183,7 +183,7 @@ export const ActiveOrderScreen: React.FC = () => {
           <div className="space-y-4">
             {/* Live Interactive Map */}
             <LiveTrackingMap
-              pickupCoords={order.pickupLocation?.coordinates || [77.2150, 28.6250]}
+              pickupCoords={order.pickupLocation?.coordinates || [77.5020, 13.0450]}
               dealerLocation={dealerLiveLocation || order.dealerLiveLocation}
               pickupAddress={order.pickupAddress}
               dealerName={order.dealerSnapshot?.businessName || 'Scrap Collector Partner'}

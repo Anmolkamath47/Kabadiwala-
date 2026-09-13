@@ -43,8 +43,17 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   const [tileMode, setTileMode] = useState<MapTileMode>('street');
   const [routeInfo, setRouteInfo] = useState<DrivingRouteResult | null>(null);
 
-  const safeLng = typeof pickupCoords?.[0] === 'number' ? pickupCoords[0] : 77.215;
-  const safeLat = typeof pickupCoords?.[1] === 'number' ? pickupCoords[1] : 28.625;
+  const parseCoord = (val: any, fallback: number): number => {
+    if (typeof val === 'number' && !isNaN(val)) return val;
+    if (typeof val === 'string') {
+      const parsed = parseFloat(val);
+      if (!isNaN(parsed)) return parsed;
+    }
+    return fallback;
+  };
+
+  const safeLng = parseCoord(pickupCoords?.[0], 77.5020);
+  const safeLat = parseCoord(pickupCoords?.[1], 13.0450);
 
   const vehicleDetails = getVehicleDetails(dealerVehicle);
 
@@ -56,6 +65,9 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
       lng: safeLng,
       lat: safeLat,
     };
+
+    let timer: any = null;
+    let resizeObserver: ResizeObserver | null = null;
 
     if (!mapInstanceRef.current) {
       const { map, switchLayer } = mapService.createMap(
@@ -71,9 +83,23 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
         pickupAddress
       );
       mapInstanceRef.current = map;
+
+      // Force size recalculation on mobile mount
+      timer = setTimeout(() => {
+        map.invalidateSize();
+      }, 200);
+
+      if (typeof ResizeObserver !== 'undefined' && mapContainerRef.current) {
+        resizeObserver = new ResizeObserver(() => {
+          map.invalidateSize();
+        });
+        resizeObserver.observe(mapContainerRef.current);
+      }
     }
 
     return () => {
+      if (timer) clearTimeout(timer);
+      if (resizeObserver) resizeObserver.disconnect();
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -187,21 +213,21 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   const isTurnLeft = routeInfo?.steps?.[0]?.modifier?.includes('left');
 
   return (
-    <div className="relative w-full h-84 sm:h-96 rounded-3xl overflow-hidden shadow-2xl border border-slate-200 select-none">
+    <div className="relative w-full h-[360px] sm:h-96 min-h-[340px] rounded-3xl overflow-hidden shadow-2xl border border-slate-200 select-none">
       <div ref={mapContainerRef} className="w-full h-full z-0" />
 
       {/* Realistic Turn-By-Turn Highway Navigation HUD Banner */}
       <div className="absolute top-3 left-3 right-3 z-10">
-        <div className="bg-gradient-to-r from-emerald-950 via-slate-950 to-emerald-950 text-white rounded-2xl p-3 shadow-2xl border border-emerald-500/40 backdrop-blur-md flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+        <div className="bg-gradient-to-r from-emerald-950 via-slate-950 to-emerald-950 text-white rounded-2xl p-2.5 sm:p-3 shadow-2xl border border-emerald-500/40 backdrop-blur-md flex items-center justify-between">
+          <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
             {/* Turn maneuver indicator based on actual route step */}
-            <div className="w-10 h-10 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center flex-shrink-0 shadow-md">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center flex-shrink-0 shadow-md">
               {isTurnLeft ? (
-                <ArrowUpLeft className="w-6 h-6 stroke-[3]" />
+                <ArrowUpLeft className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
               ) : routeInfo?.steps?.[0]?.modifier?.includes('right') ? (
-                <ArrowUpRight className="w-6 h-6 stroke-[3]" />
+                <ArrowUpRight className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
               ) : (
-                <ArrowUp className="w-6 h-6 stroke-[3]" />
+                <ArrowUp className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
               )}
             </div>
 
@@ -221,17 +247,17 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
           </div>
 
           {/* Quick HUD Metrics */}
-          <div className="flex items-center space-x-3 text-right flex-shrink-0">
+          <div className="flex items-center space-x-2 sm:space-x-3 text-right flex-shrink-0 ml-2">
             <div className="hidden sm:block">
               <div className="text-[10px] text-emerald-400 font-bold uppercase">Speed</div>
               <div className="text-xs font-extrabold text-white">{currentSpeed} km/h</div>
             </div>
-            <div className="bg-white/10 px-2.5 py-1.5 rounded-xl border border-white/10">
+            <div className="bg-white/10 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border border-white/10">
               <div className="text-[10px] text-slate-300 font-semibold flex items-center justify-end space-x-1">
                 <Clock className="w-3 h-3 text-emerald-400" />
                 <span>ETA</span>
               </div>
-              <div className="text-sm font-black text-emerald-300">{etaMins} mins</div>
+              <div className="text-xs sm:text-sm font-black text-emerald-300">{etaMins} mins</div>
             </div>
           </div>
         </div>
@@ -243,10 +269,10 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
         <button
           type="button"
           onClick={handleToggleLayer}
-          className="px-3 h-10 bg-slate-900/90 backdrop-blur-md hover:bg-slate-800 text-white rounded-2xl shadow-xl border border-slate-700 flex items-center space-x-1.5 text-xs font-bold transition active:scale-95"
+          className="px-3 h-9 sm:h-10 bg-slate-900/90 backdrop-blur-md hover:bg-slate-800 text-white rounded-2xl shadow-xl border border-slate-700 flex items-center space-x-1.5 text-xs font-bold transition active:scale-95"
           title="Toggle Google Streets / Google Satellite"
         >
-          <Layers className="w-4 h-4 text-emerald-400" />
+          <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
           <span className="capitalize">{tileMode === 'street' ? 'Satellite' : 'Streets'}</span>
         </button>
 
@@ -254,21 +280,21 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
         <button
           type="button"
           onClick={handleRecenter}
-          className="w-10 h-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl shadow-xl border border-emerald-500 flex items-center justify-center transition active:scale-95 ml-auto"
+          className="w-9 h-9 sm:w-10 sm:h-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl shadow-xl border border-emerald-500 flex items-center justify-center transition active:scale-95 ml-auto"
           title="Recenter Navigation"
         >
-          <RotateCcw className="w-5 h-5" />
+          <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
       </div>
 
       {/* Live Route Distance Indicator Pill */}
-      <div className="absolute bottom-3 left-3 z-10 pointer-events-none">
-        <div className="bg-slate-950/90 backdrop-blur-md text-white px-3 py-1.5 rounded-xl shadow-lg border border-slate-700 flex items-center space-x-2 text-xs font-bold">
+      <div className="absolute bottom-3 left-3 z-10 pointer-events-none max-w-[calc(100%-8.5rem)]">
+        <div className="bg-slate-950/90 backdrop-blur-md text-white px-2.5 sm:px-3 py-1.5 rounded-xl shadow-lg border border-slate-700 flex items-center space-x-1.5 text-[11px] sm:text-xs font-bold truncate">
           <Compass
-            className="w-4 h-4 text-emerald-400 animate-spin"
+            className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 animate-spin flex-shrink-0"
             style={{ animationDuration: '6s' }}
           />
-          <span>{distanceKm} km remaining · Live Road Navigation</span>
+          <span className="truncate">{distanceKm} km away<span className="hidden sm:inline"> · Live Road Navigation</span></span>
         </div>
       </div>
     </div>
