@@ -90,7 +90,15 @@ const mergePartnerDealer = (
     const parsed = JSON.parse(cachedDealerStr);
     if (!parsed || !parsed.dealerId) return dealers;
 
-    const list = [...dealers];
+    // Purge dummy GreenEarth Scrap Hub
+    if (parsed.businessName === 'GreenEarth Scrap Hub' || parsed.dealerId === 'DLR-BLR-001') {
+      try {
+        localStorage.removeItem('kabadidealer_dealer');
+      } catch {}
+      return dealers.filter((d) => d.dealerId !== 'DLR-BLR-001' && d.businessName !== 'GreenEarth Scrap Hub');
+    }
+
+    const list = [...dealers].filter((d) => d.dealerId !== 'DLR-BLR-001' && d.businessName !== 'GreenEarth Scrap Hub');
     const existingIdx = list.findIndex((d) => d.dealerId === parsed.dealerId);
 
     // If dealer has toggled offline
@@ -128,7 +136,7 @@ const mergePartnerDealer = (
 
       const dynamicDealer: Dealer = {
         dealerId: parsed.dealerId,
-        businessName: parsed.businessName || 'GreenEarth Scrap Hub',
+        businessName: parsed.businessName || 'Scrap Collection Center',
         contactPerson: parsed.contactPerson || 'Partner Dealer',
         phone: parsed.phone || '+91 98860 12345',
         rating: parsed.rating || 4.9,
@@ -345,21 +353,6 @@ export const dealerService = {
         vehicleType: 'Tata Ace Scrap Hauler',
         scrapRates: DEFAULT_SCRAP_RATES,
       },
-      {
-        dealerId: 'DLR-BLR-001',
-        businessName: 'GreenEarth Scrap Hub',
-        contactPerson: 'Partner Dealer',
-        phone: '+91 98860 12345',
-        rating: 4.9,
-        totalRatings: 142,
-        isAvailable: true,
-        isOnline: true,
-        isBusy: false,
-        location: { coordinates: [77.5058, 13.04314] as [number, number] },
-        address: 'Chokkasandra, Bengaluru, 560057',
-        vehicleType: 'Tata Ace Mini Truck',
-        scrapRates: DEFAULT_SCRAP_RATES,
-      },
     ];
 
     // Check if an active partner dealer session is cached in localStorage or Broadcast
@@ -368,7 +361,11 @@ export const dealerService = {
         const cachedDealer = localStorage.getItem('kabadidealer_dealer');
         if (cachedDealer) {
           const parsed = JSON.parse(cachedDealer);
-          if (parsed && parsed.dealerId && parsed.isOnline) {
+          if (parsed.businessName === 'GreenEarth Scrap Hub' || parsed.dealerId === 'DLR-BLR-001') {
+            try {
+              localStorage.removeItem('kabadidealer_dealer');
+            } catch {}
+          } else if (parsed && parsed.dealerId && parsed.isOnline) {
             const existingIdx = baseDealers.findIndex((d) => d.dealerId === parsed.dealerId);
             const dynamicCoords = reconcileCityCoordinates(
               parsed.location?.address,
@@ -376,7 +373,7 @@ export const dealerService = {
             );
             const dynamicDealer = {
               dealerId: parsed.dealerId,
-              businessName: parsed.businessName || 'GreenEarth Scrap Hub',
+              businessName: parsed.businessName || 'Scrap Collection Center',
               contactPerson: parsed.contactPerson || 'Partner Dealer',
               phone: parsed.phone || '+91 98860 12345',
               rating: parsed.rating || 4.9,
@@ -385,7 +382,7 @@ export const dealerService = {
               isOnline: parsed.isOnline ?? true,
               isBusy: parsed.isBusy ?? false,
               location: { coordinates: dynamicCoords as [number, number] },
-              address: parsed.location?.address || 'Chokkasandra, Bengaluru, 560057',
+              address: parsed.location?.address || 'Pickup Service Area',
               vehicleType: parsed.vehicleType || 'Tata Ace Mini Truck',
               scrapRates: parsed.scrapRates && parsed.scrapRates.length > 0 ? parsed.scrapRates : DEFAULT_SCRAP_RATES,
             };
