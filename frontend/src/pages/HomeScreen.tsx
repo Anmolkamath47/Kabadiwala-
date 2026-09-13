@@ -71,6 +71,11 @@ export const HomeScreen: React.FC = () => {
           setDealers(data.dealers || []);
           setLastUpdatedTime(new Date());
 
+          // If expanded search found 0 dealers, reset radius to standard 15km
+          if ((!data.dealers || data.dealers.length === 0) && searchRadius > 25) {
+            setSearchRadius(15);
+          }
+
           // 2. If no dealers within radius, check if active dealers exist in other cities
           if ((!data.dealers || data.dealers.length === 0) && searchRadius <= 25) {
             const allActive = await dealerService.getAllActiveDealers(lat, lng);
@@ -390,13 +395,15 @@ export const HomeScreen: React.FC = () => {
                   <span>{isDetectingGps ? 'Detecting GPS...' : 'Use My Current GPS Location'}</span>
                 </button>
 
-                <button
-                  onClick={() => setSearchRadius(5000)}
-                  className="w-full py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5"
-                >
-                  <Radio className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Expand Search Radius (Show All Cities)</span>
-                </button>
+                {otherAreaDealers.length > 0 && (
+                  <button
+                    onClick={() => setSearchRadius(5000)}
+                    className="w-full py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5"
+                  >
+                    <Radio className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Expand Search Radius ({otherAreaDealers.length} active in other areas)</span>
+                  </button>
+                )}
               </div>
             </div>
           ) : (

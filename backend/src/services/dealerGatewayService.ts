@@ -31,6 +31,27 @@ export interface NearbyDealerResult {
   }>;
 }
 
+const DUMMY_DEALER_IDS = new Set([
+  'DLR-BLR-001',
+  'DLR-RAMESH-001',
+  'DLR-SURESH-002',
+  'DLR-530794',
+]);
+
+const DUMMY_DEALER_NAMES = new Set([
+  'GreenEarth Scrap Hub',
+  'Ramesh Green Recycling',
+  'Verma Scrap & Metals',
+  'Arun Scrap Traders',
+]);
+
+const isDummyDealer = (d: any): boolean => {
+  if (!d) return true;
+  if (d.dealerId && DUMMY_DEALER_IDS.has(d.dealerId)) return true;
+  if (d.businessName && DUMMY_DEALER_NAMES.has(d.businessName)) return true;
+  return false;
+};
+
 export class DealerGatewayService {
   /**
    * Helper headers for authenticating internal requests to Kabadidealer
@@ -67,6 +88,8 @@ export class DealerGatewayService {
         const results: NearbyDealerResult[] = [];
 
         for (const dealer of dealers) {
+          if (isDummyDealer(dealer)) continue;
+
           let rates = dealer.scrapRates || [];
           if (category) {
             rates = rates.filter(
@@ -109,6 +132,8 @@ export class DealerGatewayService {
     const results: NearbyDealerResult[] = [];
 
     for (const dealer of dealers) {
+      if (isDummyDealer(dealer)) continue;
+
       const [dealerLng, dealerLat] = dealer.location.coordinates;
       const distance = calculateDistanceKm(lat, lng, dealerLat, dealerLng);
       const effectiveRadius = radiusKm >= 100 ? radiusKm : Math.max(radiusKm, dealer.activeRadiusKm || 15);

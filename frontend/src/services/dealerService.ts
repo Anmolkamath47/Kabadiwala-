@@ -55,6 +55,27 @@ export const estimateEtaMinutes = (distanceKm: number): number => {
   return Math.ceil((distanceKm / 20) * 60) + 3;
 };
 
+export const DUMMY_DEALER_IDS = new Set([
+  'DLR-BLR-001',
+  'DLR-RAMESH-001',
+  'DLR-SURESH-002',
+  'DLR-530794',
+]);
+
+export const DUMMY_DEALER_NAMES = new Set([
+  'GreenEarth Scrap Hub',
+  'Ramesh Green Recycling',
+  'Verma Scrap & Metals',
+  'Arun Scrap Traders',
+]);
+
+export const isDummyDealer = (dealer: any): boolean => {
+  if (!dealer) return true;
+  if (dealer.dealerId && DUMMY_DEALER_IDS.has(dealer.dealerId)) return true;
+  if (dealer.businessName && DUMMY_DEALER_NAMES.has(dealer.businessName)) return true;
+  return false;
+};
+
 const resolvePartnerApiUrl = (): string => {
   const envUrl = import.meta.env.VITE_DEALER_API_URL;
   if (envUrl) return envUrl.replace(/\/$/, '');
@@ -81,24 +102,24 @@ const mergePartnerDealer = (
   radiusKm: number = 15,
   category?: ScrapCategory
 ): Dealer[] => {
-  if (typeof window === 'undefined') return dealers;
+  if (typeof window === 'undefined') return dealers.filter((d) => !isDummyDealer(d));
 
   try {
     const cachedDealerStr = localStorage.getItem('kabadidealer_dealer');
-    if (!cachedDealerStr) return dealers;
+    if (!cachedDealerStr) return dealers.filter((d) => !isDummyDealer(d));
 
     const parsed = JSON.parse(cachedDealerStr);
-    if (!parsed || !parsed.dealerId) return dealers;
+    if (!parsed || !parsed.dealerId) return dealers.filter((d) => !isDummyDealer(d));
 
-    // Purge dummy GreenEarth Scrap Hub
-    if (parsed.businessName === 'GreenEarth Scrap Hub' || parsed.dealerId === 'DLR-BLR-001') {
+    // Purge any dummy dealer from localStorage
+    if (isDummyDealer(parsed)) {
       try {
         localStorage.removeItem('kabadidealer_dealer');
       } catch {}
-      return dealers.filter((d) => d.dealerId !== 'DLR-BLR-001' && d.businessName !== 'GreenEarth Scrap Hub');
+      return dealers.filter((d) => !isDummyDealer(d));
     }
 
-    const list = [...dealers].filter((d) => d.dealerId !== 'DLR-BLR-001' && d.businessName !== 'GreenEarth Scrap Hub');
+    const list = [...dealers].filter((d) => !isDummyDealer(d));
     const existingIdx = list.findIndex((d) => d.dealerId === parsed.dealerId);
 
     // If dealer has toggled offline
@@ -189,7 +210,7 @@ export const dealerService = {
 
     const addDealers = (dealerList: Dealer[]) => {
       for (const d of dealerList) {
-        if (!d || !d.dealerId) continue;
+        if (!d || !d.dealerId || isDummyDealer(d)) continue;
         const [dLng, dLat] = d.location?.coordinates || [lng, lat];
         const dist = d.distanceKm ?? calculateDistanceKm(lat, lng, dLat, dLng);
         const effectiveRadius = radius >= 100 ? radius : Math.max(radius, (d as any).activeRadiusKm || 15);
@@ -235,14 +256,14 @@ export const dealerService = {
       // Direct Partner API quiet fallback
     }
 
-    // --- Tier 3: If no dealers found within radius, fallback to local catalogue ---
+    // --- Tier 3: If no registered dealers from APIs, check active partner session from localStorage only ---
     if (collectedMap.size === 0) {
       const fallback = this.getFallbackDealers(lat, lng, radius, category);
       addDealers(fallback.dealers);
     }
 
     // Apply any local cross-tab / cross-origin partner dealer session override
-    const rawList = Array.from(collectedMap.values());
+    const rawList = Array.from(collectedMap.values()).filter((d) => !isDummyDealer(d));
     const merged = mergePartnerDealer(rawList, lat, lng, radius, category);
 
     return {
@@ -253,7 +274,7 @@ export const dealerService = {
 
   /**
    * Fetch all active dealers regardless of radius (e.g. across cities)
-   * Allows the UI to inform the user if active dealers exist in other locations
+   * Allows the UI to inform the user if real active dealers exist in other locations
    */
   async getAllActiveDealers(
     lat: number,
@@ -263,10 +284,14 @@ export const dealerService = {
   },
 
   async getDealerDetails(dealerId: string): Promise<Dealer> {
+    if (DUMMY_DEALER_IDS.has(dealerId)) {
+      throw new Error(`Dealer ${dealerId} not found`);
+    }
+
     // 1. Try Consumer Backend
     try {
       const res = await api.get(`/dealers/${dealerId}`, { timeout: 3500 });
-      if (res.data?.data) return res.data.data;
+      if (res.data?.data && !isDummyDealer(res.data.data)) return res.data.data;
     } catch {
       // Ignore and proceed to Tier 2
     }
@@ -275,14 +300,14 @@ export const dealerService = {
     try {
       const partnerUrl = `${resolvePartnerApiUrl()}/dealers/${dealerId}`;
       const res = await axios.get(partnerUrl, { timeout: 3500 });
-      if (res.data?.data) return res.data.data;
+      if (res.data?.data && !isDummyDealer(res.data.data)) return res.data.data;
     } catch {
       // Ignore and proceed to Fallback
     }
 
     // 3. Fallback Catalogue
-    const fallbackList = await this.getFallbackDealers(28.6250, 77.2150, 5000);
-    const found = fallbackList.dealers.find((d) => d.dealerId === dealerId);
+    const fallbackList = this.getFallbackDealers(28.625, 77.215, 5000);
+    const found = fallbackList.dealers.find((d) => d.dealerId === dealerId && !isDummyDealer(d));
     if (found) return found;
 
     throw new Error(`Dealer ${dealerId} not found`);
@@ -300,6 +325,7 @@ export const dealerService = {
 
   /**
    * Construct resilient fallback dealers with accurate distance calculation
+   * ZERO dummy dealers. Only genuinely logged-in partner dealer session from localStorage if any.
    */
   getFallbackDealers(
     lat: number,
@@ -307,53 +333,8 @@ export const dealerService = {
     radiusKm: number = 15,
     category?: ScrapCategory
   ): { dealers: Dealer[]; count: number } {
-    const baseDealers = [
-      {
-        dealerId: 'DLR-530794',
-        businessName: 'Arun Scrap Traders',
-        contactPerson: 'Arun Kumar',
-        phone: '+91 99112 23344',
-        rating: 4.9,
-        totalRatings: 156,
-        isAvailable: true,
-        isOnline: true,
-        isBusy: false,
-        location: { coordinates: [77.2090, 28.6139] as [number, number] },
-        address: 'Shop 14, Main Scrap Market, Sector 12, New Delhi - 110001',
-        vehicleType: 'Electric Scrap Loader',
-        scrapRates: DEFAULT_SCRAP_RATES,
-      },
-      {
-        dealerId: 'DLR-RAMESH-001',
-        businessName: 'Ramesh Green Recycling',
-        contactPerson: 'Ramesh Kumar',
-        phone: '+91 98765 43210',
-        rating: 4.9,
-        totalRatings: 142,
-        isAvailable: true,
-        isOnline: true,
-        isBusy: false,
-        location: { coordinates: [77.2150, 28.6250] as [number, number] },
-        address: 'Plot 44, Recycling Estate, Connaught Place, New Delhi - 110001',
-        vehicleType: 'Electric Mini Loader 800kg',
-        scrapRates: DEFAULT_SCRAP_RATES,
-      },
-      {
-        dealerId: 'DLR-SURESH-002',
-        businessName: 'Verma Scrap & Metals',
-        contactPerson: 'Suresh Verma',
-        phone: '+91 98765 43211',
-        rating: 4.7,
-        totalRatings: 89,
-        isAvailable: true,
-        isOnline: true,
-        isBusy: false,
-        location: { coordinates: [77.1900, 28.6500] as [number, number] },
-        address: 'Shop 18, Metal Market, Karol Bagh, New Delhi - 110005',
-        vehicleType: 'Tata Ace Scrap Hauler',
-        scrapRates: DEFAULT_SCRAP_RATES,
-      },
-    ];
+    // No hardcoded dummy dealers in any location
+    const baseDealers: Dealer[] = [];
 
     // Check if an active partner dealer session is cached in localStorage or Broadcast
     if (typeof window !== 'undefined') {
@@ -361,17 +342,17 @@ export const dealerService = {
         const cachedDealer = localStorage.getItem('kabadidealer_dealer');
         if (cachedDealer) {
           const parsed = JSON.parse(cachedDealer);
-          if (parsed.businessName === 'GreenEarth Scrap Hub' || parsed.dealerId === 'DLR-BLR-001') {
+          if (isDummyDealer(parsed)) {
             try {
               localStorage.removeItem('kabadidealer_dealer');
             } catch {}
           } else if (parsed && parsed.dealerId && parsed.isOnline) {
-            const existingIdx = baseDealers.findIndex((d) => d.dealerId === parsed.dealerId);
             const dynamicCoords = reconcileCityCoordinates(
               parsed.location?.address,
               parsed.location?.coordinates || [lng, lat]
             );
-            const dynamicDealer = {
+            const dist = calculateDistanceKm(lat, lng, dynamicCoords[1], dynamicCoords[0]);
+            const dynamicDealer: Dealer = {
               dealerId: parsed.dealerId,
               businessName: parsed.businessName || 'Scrap Collection Center',
               contactPerson: parsed.contactPerson || 'Partner Dealer',
@@ -381,16 +362,14 @@ export const dealerService = {
               isAvailable: parsed.isOnline ?? true,
               isOnline: parsed.isOnline ?? true,
               isBusy: parsed.isBusy ?? false,
+              distanceKm: dist,
+              etaMinutes: estimateEtaMinutes(dist),
               location: { coordinates: dynamicCoords as [number, number] },
               address: parsed.location?.address || 'Pickup Service Area',
               vehicleType: parsed.vehicleType || 'Tata Ace Mini Truck',
               scrapRates: parsed.scrapRates && parsed.scrapRates.length > 0 ? parsed.scrapRates : DEFAULT_SCRAP_RATES,
             };
-            if (existingIdx >= 0) {
-              baseDealers[existingIdx] = dynamicDealer;
-            } else {
-              baseDealers.unshift(dynamicDealer);
-            }
+            baseDealers.push(dynamicDealer);
           }
         }
       } catch {
@@ -400,6 +379,7 @@ export const dealerService = {
 
     const results: Dealer[] = [];
     for (const d of baseDealers) {
+      if (isDummyDealer(d)) continue;
       if (!d.isOnline && !d.isAvailable) continue;
       const [dealerLng, dealerLat] = d.location.coordinates;
       const distance = calculateDistanceKm(lat, lng, dealerLat, dealerLng);
