@@ -1,6 +1,25 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+const normalizeApiUrl = (url?: string, defaultUrl: string = 'http://localhost:5001/api'): string => {
+  const target = url?.trim() || defaultUrl;
+  let clean = target.replace(/\/+$/, '');
+  if (!clean.endsWith('/api')) {
+    clean = `${clean}/api`;
+  }
+  return clean;
+};
+
+const defaultDealerApi =
+  process.env.NODE_ENV === 'production'
+    ? 'https://kabadidealer-backend.onrender.com/api'
+    : 'http://localhost:5001/api';
+
+const resolvedDealerApiUrl = normalizeApiUrl(
+  process.env.KABADIDEALER_API_URL || process.env.DEALER_API_URL,
+  defaultDealerApi
+);
+
 export const config = {
   port: parseInt(process.env.PORT || '5000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -11,10 +30,11 @@ export const config = {
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   mongoUri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/kabadiwala_consumer',
   useMemoryDb: process.env.USE_MEMORY_DB === 'true' || process.env.NODE_ENV === 'test',
-  dealerApiUrl: process.env.KABADIDEALER_API_URL || process.env.DEALER_API_URL || 'http://localhost:5001/api',
-  kabadidealerApiUrl: process.env.KABADIDEALER_API_URL || process.env.DEALER_API_URL || 'http://localhost:5001/api',
-  kabadidealerSocketUrl: process.env.KABADIDEALER_SOCKET_URL || 'http://localhost:5001',
+  dealerApiUrl: resolvedDealerApiUrl,
+  kabadidealerApiUrl: resolvedDealerApiUrl,
+  kabadidealerSocketUrl: process.env.KABADIDEALER_SOCKET_URL || (process.env.NODE_ENV === 'production' ? 'https://kabadidealer-backend.onrender.com' : 'http://localhost:5001'),
   dealerServiceApiKey: process.env.DEALER_SERVICE_API_KEY || 'kbad_shared_internal_secret_key_9988',
   otpDemoCode: process.env.OTP_DEMO_CODE || '1234',
   defaultSearchRadiusKm: 15,
 };
+

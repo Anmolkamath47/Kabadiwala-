@@ -148,4 +148,21 @@ export const socketEvents = {
       updatedAt: locationData.updatedAt,
     });
   },
+
+  /**
+   * Broadcast dealer online/offline presence or status update to all consumers
+   */
+  emitDealerStatusUpdate: (dealerId: string, isOnline: boolean, data?: any) => {
+    if (!ioInstance) return;
+    const payload = {
+      dealerId,
+      isOnline,
+      timestamp: new Date(),
+      ...data,
+    };
+    ioInstance.emit('dealer:status', payload);
+    if (isOnline) {
+      ioInstance.emit('dealer:online', payload);
+    }
+  },
 };

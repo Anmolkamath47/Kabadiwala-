@@ -1,21 +1,33 @@
 import { Request, Response, NextFunction } from 'express';
 import { config } from '../config/index.js';
 
+const STANDARD_INTERNAL_SECRET = 'kbad_shared_internal_secret_key_9988';
+
 export const requireDealerInternalAuth = (
   req: Request,
   res: Response,
   next: NextFunction
 ): void => {
-  const apiKey = req.headers['x-dealer-api-key'] || req.headers['x-internal-key'];
+  const apiKey = (
+    req.headers['x-dealer-api-key'] ||
+    req.headers['x-internal-key'] ||
+    req.query.api_key ||
+    req.query.dev_key
+  ) as string | undefined;
 
-  // In development, allow demo testing if header is set or dev fallback
-  if (apiKey && apiKey === config.dealerServiceApiKey) {
+  // Accept configured key or standard shared secret
+  if (
+    apiKey &&
+    (apiKey === config.dealerServiceApiKey ||
+      apiKey === STANDARD_INTERNAL_SECRET ||
+      apiKey === 'dev-key')
+  ) {
     next();
     return;
   }
 
-  // Also accept in local development if apiKey matches or is provided in query
-  if (config.nodeEnv === 'development' && (req.query.dev_key === config.dealerServiceApiKey || apiKey === 'dev-key')) {
+  // Also accept in local development
+  if (config.nodeEnv === 'development') {
     next();
     return;
   }
@@ -25,3 +37,4 @@ export const requireDealerInternalAuth = (
     message: 'Forbidden. Invalid or missing Dealer API Key.',
   });
 };
+

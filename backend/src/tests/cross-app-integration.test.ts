@@ -84,6 +84,17 @@ async function runCrossAppIntegrationTests() {
       (d: any) => d.dealerId === targetDealerId
     ) || nearbyRes.data.data.dealers[0];
     assert(!!activeDealer.dealerId, `Target Dealer Selected: ${activeDealer.businessName} (${activeDealer.dealerId})`);
+    assert(activeDealer.isOnline === true, 'Target Dealer is marked isOnline === true in Kabadiwala discovery');
+    assert(activeDealer.isAvailable === true, 'Target Dealer is marked isAvailable === true in Kabadiwala discovery');
+
+    // Test cross-city / expanded radius discovery (e.g. from Bengaluru to Delhi dealer)
+    const expandedRes = await axios.get(`${KABADIWALA_API}/dealers/nearby`, {
+      params: { lat: 12.9716, lng: 77.5946, radius: 5000 },
+    });
+    assert(
+      expandedRes.data.data.dealers.length >= 1,
+      `Expanded radius (5000km) discovery returned ${expandedRes.data.data.dealers.length} active dealers without 15km clamp`
+    );
 
     // ========================================================
     // 2. Fetch dealer material prices

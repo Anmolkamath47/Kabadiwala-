@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   InternalDealerController,
+  DealerPresenceSchema,
   DealerStatusTransitionSchema,
   DealerLocationUpdateSchema,
   DealerOtpVerifySchema,
@@ -13,6 +14,16 @@ const router = Router();
 // Secure webhook endpoints for separately deployed dealer service
 router.use(requireDealerInternalAuth);
 
+router.post(
+  '/presence',
+  validateRequest(DealerPresenceSchema),
+  InternalDealerController.updateDealerPresence
+);
+router.post(
+  '/dealer-status',
+  validateRequest(DealerPresenceSchema),
+  InternalDealerController.updateDealerPresence
+);
 router.post(
   '/status',
   validateRequest(DealerStatusTransitionSchema),

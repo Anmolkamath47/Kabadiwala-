@@ -67,8 +67,98 @@ const resolvePartnerApiUrl = (): string => {
     if (/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(host)) {
       return `http://${host}:5001/api`;
     }
+    if (window.location.protocol === 'https:' || host.includes('vercel.app')) {
+      return 'https://kabadidealer-backend.onrender.com/api';
+    }
   }
   return 'http://localhost:5001/api';
+};
+
+const mergePartnerDealer = (
+  dealers: Dealer[],
+  lat: number,
+  lng: number,
+  radiusKm: number = 15,
+  category?: ScrapCategory
+): Dealer[] => {
+  if (typeof window === 'undefined') return dealers;
+
+  try {
+    const cachedDealerStr = localStorage.getItem('kabadidealer_dealer');
+    if (!cachedDealerStr) return dealers;
+
+    const parsed = JSON.parse(cachedDealerStr);
+    if (!parsed || !parsed.dealerId) return dealers;
+
+    const list = [...dealers];
+    const existingIdx = list.findIndex((d) => d.dealerId === parsed.dealerId);
+
+    // If dealer has toggled offline
+    if (parsed.isOnline === false) {
+      if (existingIdx >= 0) {
+        list[existingIdx] = {
+          ...list[existingIdx],
+          isOnline: false,
+          isAvailable: false,
+        };
+      }
+      return list;
+    }
+
+    // Dealer is online
+    const rawCoords = parsed.location?.coordinates || [lng, lat];
+    const dynamicCoords = reconcileCityCoordinates(
+      parsed.location?.address,
+      rawCoords
+    );
+    const [dealerLng, dealerLat] = dynamicCoords;
+    const distance = calculateDistanceKm(lat, lng, dealerLat, dealerLng);
+
+    const effectiveRadius = radiusKm >= 100 ? radiusKm : Math.max(radiusKm, parsed.activeRadiusKm || 15);
+    if (radiusKm >= 100 || distance <= effectiveRadius) {
+      let scrapRates =
+        parsed.scrapRates && parsed.scrapRates.length > 0
+          ? parsed.scrapRates
+          : DEFAULT_SCRAP_RATES;
+      if (category) {
+        scrapRates = scrapRates.filter(
+          (r: any) => r.category?.toLowerCase() === category.toLowerCase()
+        );
+      }
+
+      const dynamicDealer: Dealer = {
+        dealerId: parsed.dealerId,
+        businessName: parsed.businessName || 'GreenEarth Scrap Hub',
+        contactPerson: parsed.contactPerson || 'Partner Dealer',
+        phone: parsed.phone || '+91 98860 12345',
+        rating: parsed.rating || 4.9,
+        totalRatings: parsed.totalRatings || 142,
+        isAvailable: true,
+        isOnline: true,
+        isBusy: parsed.isBusy ?? false,
+        distanceKm: distance,
+        etaMinutes: estimateEtaMinutes(distance),
+        location: {
+          coordinates: [dealerLng, dealerLat],
+        },
+        address: parsed.location?.address || parsed.address || 'Pickup Service Area',
+        vehicleType: parsed.vehicleType || 'Tata Ace Mini Truck',
+        scrapRates,
+      };
+
+      if (existingIdx >= 0) {
+        list[existingIdx] = dynamicDealer;
+      } else {
+        list.unshift(dynamicDealer);
+      }
+    }
+
+    list.sort((a, b) => a.distanceKm - b.distanceKm || b.rating - a.rating);
+    return list;
+  } catch (err) {
+    console.warn('[DealerService] Error merging partner dealer:', err);
+    return dealers;
+  }
 };
 
 export const dealerService = {
@@ -87,44 +177,70 @@ export const dealerService = {
     const params: any = { lat, lng, radius };
     if (category) params.category = category;
 
-    // --- Tier 1: Try Primary Consumer Backend ---
+    const collectedMap = new Map<string, Dealer>();
+
+    const addDealers = (dealerList: Dealer[]) => {
+      for (const d of dealerList) {
+        if (!d || !d.dealerId) continue;
+        const [dLng, dLat] = d.location?.coordinates || [lng, lat];
+        const dist = d.distanceKm ?? calculateDistanceKm(lat, lng, dLat, dLng);
+        const effectiveRadius = radius >= 100 ? radius : Math.max(radius, (d as any).activeRadiusKm || 15);
+
+        if (radius >= 100 || dist <= effectiveRadius) {
+          collectedMap.set(d.dealerId, {
+            ...d,
+            distanceKm: dist,
+            etaMinutes: d.etaMinutes ?? estimateEtaMinutes(dist),
+            isOnline: d.isOnline ?? true,
+            isAvailable: d.isAvailable ?? true,
+          });
+        }
+      }
+    };
+
+    // --- Tier 1: Primary Consumer Backend API (/dealers/nearby) ---
     try {
       const res = await api.get('/dealers/nearby', { params, timeout: 3500 });
-      if (
-        res.data &&
-        typeof res.data === 'object' &&
-        res.data.data &&
-        Array.isArray(res.data.data.dealers)
-      ) {
-        return res.data.data;
+      if (res.data?.data?.dealers && Array.isArray(res.data.data.dealers)) {
+        addDealers(res.data.data.dealers);
       }
     } catch (err: any) {
-      console.warn('⚠️ [DealerService] Consumer backend unreachable or error. Trying Direct Partner API...', err.message);
+      console.warn('⚠️ [DealerService] Consumer backend unreachable or error:', err.message);
     }
 
-    // --- Tier 2: Try Direct Partner Dealer Backend (e.g. port 5001) ---
+    // --- Tier 2: Direct Partner Dealer Backend API (e.g. port 5001 /dealers/nearby) ---
+    // Always query direct partner backend so active/newly registered dealers appear immediately!
     try {
       const partnerUrl = `${resolvePartnerApiUrl()}/dealers/nearby`;
       const partnerRes = await axios.get(partnerUrl, { params, timeout: 3500 });
-      if (partnerRes.data?.data && Array.isArray(partnerRes.data.data.dealers)) {
-        let dealers: Dealer[] = partnerRes.data.data.dealers;
+      if (partnerRes.data?.data?.dealers && Array.isArray(partnerRes.data.data.dealers)) {
+        let pDealers: Dealer[] = partnerRes.data.data.dealers;
         if (category) {
-          dealers = dealers.map((d) => ({
+          pDealers = pDealers.map((d) => ({
             ...d,
             scrapRates: d.scrapRates?.filter((r) => r.category?.toLowerCase() === category.toLowerCase()) || [],
           }));
         }
-        return {
-          dealers,
-          count: dealers.length,
-        };
+        addDealers(pDealers);
       }
-    } catch (partnerErr: any) {
-      console.warn('⚠️ [DealerService] Direct Partner API unreachable:', partnerErr.message);
+    } catch {
+      // Direct Partner API quiet fallback
     }
 
-    // --- Tier 3: Resilient Fallback with Dynamic Distances & Active Partner Dealers ---
-    return this.getFallbackDealers(lat, lng, radius, category);
+    // --- Tier 3: If no dealers found within radius, fallback to local catalogue ---
+    if (collectedMap.size === 0) {
+      const fallback = this.getFallbackDealers(lat, lng, radius, category);
+      addDealers(fallback.dealers);
+    }
+
+    // Apply any local cross-tab / cross-origin partner dealer session override
+    const rawList = Array.from(collectedMap.values());
+    const merged = mergePartnerDealer(rawList, lat, lng, radius, category);
+
+    return {
+      dealers: merged,
+      count: merged.length,
+    };
   },
 
   /**
@@ -291,7 +407,7 @@ export const dealerService = {
       const [dealerLng, dealerLat] = d.location.coordinates;
       const distance = calculateDistanceKm(lat, lng, dealerLat, dealerLng);
 
-      if (distance <= radiusKm) {
+      if (radiusKm >= 100 || distance <= radiusKm) {
         let rates = d.scrapRates;
         if (category) {
           rates = rates.filter((r) => r.category.toLowerCase() === category.toLowerCase());

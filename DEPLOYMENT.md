@@ -67,6 +67,8 @@ This repository contains the complete **Kabadiwala Consumer Scrap Pickup Applica
 ## 3. Production Verification Checklist
 
 - [ ] `/api/health` on Render backend returns `{"status":"healthy"}`.
+- [ ] `/api/health/connectivity` returns `{"crossAppConnectivity": {"connected": true}}` confirming mutual connection with Kabadidealer backend.
 - [ ] Vercel frontend loads without CORS errors in browser console.
 - [ ] Direct page refresh on any subroute (e.g., `/pickup`, `/orders`, `/profile`, `/rates`) works seamlessly thanks to `vercel.json` rewrites.
 - [ ] Real-time Socket.IO connection is established for live dealer tracking and order updates.
+

@@ -111,7 +111,7 @@ export class DealerGatewayService {
     for (const dealer of dealers) {
       const [dealerLng, dealerLat] = dealer.location.coordinates;
       const distance = calculateDistanceKm(lat, lng, dealerLat, dealerLng);
-      const effectiveRadius = Math.min(radiusKm, dealer.activeRadiusKm || 15);
+      const effectiveRadius = radiusKm >= 100 ? radiusKm : Math.max(radiusKm, dealer.activeRadiusKm || 15);
 
       if (distance <= effectiveRadius) {
         let rates = dealer.scrapRates;
@@ -126,7 +126,8 @@ export class DealerGatewayService {
           phone: dealer.phone,
           rating: dealer.rating,
           totalRatings: dealer.totalRatings,
-          isAvailable: dealer.isAvailable,
+          isAvailable: dealer.isAvailable ?? true,
+          isOnline: dealer.isAvailable ?? true,
           distanceKm: distance,
           etaMinutes: estimateEtaMinutes(distance),
           location: {

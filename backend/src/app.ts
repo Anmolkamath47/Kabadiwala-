@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import axios from 'axios';
+import { config } from './config/index.js';
 
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
@@ -52,6 +54,43 @@ app.get('/api/health', (_req, res) => {
     uptime: process.uptime(),
   });
 });
+
+// Real-time cross-app connectivity diagnostic check
+app.get('/api/health/connectivity', async (_req, res) => {
+  const startTime = Date.now();
+  let partnerConnected = false;
+  let partnerLatencyMs = 0;
+  let partnerError: string | null = null;
+  let partnerData: any = null;
+
+  try {
+    const partnerRes = await axios.get(`${config.kabadidealerApiUrl}/health`, {
+      timeout: 4000,
+      headers: { 'x-dealer-api-key': config.dealerServiceApiKey },
+    });
+    partnerConnected = partnerRes.status >= 200 && partnerRes.status < 300;
+    partnerLatencyMs = Date.now() - startTime;
+    partnerData = partnerRes.data;
+  } catch (err: any) {
+    partnerError = err.message || 'Connection failed';
+    partnerLatencyMs = Date.now() - startTime;
+  }
+
+  res.status(partnerConnected ? 200 : 207).json({
+    status: 'healthy',
+    service: 'Kabadiwala Consumer Backend',
+    uptime: process.uptime(),
+    crossAppConnectivity: {
+      partnerBackendUrl: config.kabadidealerApiUrl,
+      connected: partnerConnected,
+      latencyMs: partnerLatencyMs,
+      error: partnerError,
+      partnerResponse: partnerData,
+    },
+    timestamp: new Date().toISOString(),
+  });
+});
+
 
 // API Routes
 app.use('/api/auth', authRoutes);
