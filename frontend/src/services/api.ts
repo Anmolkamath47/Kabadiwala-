@@ -103,7 +103,7 @@ api.interceptors.response.use(
       } else {
         error.message = isCloud
           ? 'Unable to connect to backend server. Please verify VITE_API_BASE_URL is configured in your Vercel Project Settings.'
-          : 'Unable to reach Kabadiwala backend (port 5000). Please check if the backend server is running.';
+          : 'Unable to reach Scrapify backend (port 5000). Please check if the backend server is running.';
       }
     }
 
