@@ -162,13 +162,13 @@ export class LeafletMapProvider implements IMapProvider {
           <!-- Live Vehicle Speed Tag Pill -->
           <div class="mb-1 bg-slate-900/95 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-slate-700 flex items-center space-x-1 whitespace-nowrap">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>${speed} km/h</span>
+            <span class="vehicle-speed-text">${speed} km/h</span>
           </div>
 
           <!-- Vehicle Icon Container with Pointer Indicator -->
           <div class="relative flex items-center justify-center">
             <!-- Rotating Directional Bearing Pointer Arrow -->
-            <div style="transform: rotate(${safeHeading}deg); transition: transform 0.3s ease; position: absolute; top: -6px; z-index: 10;" class="flex items-center justify-center pointer-events-none">
+            <div class="bearing-arrow-wrap flex items-center justify-center pointer-events-none" style="transform: rotate(${safeHeading}deg); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); position: absolute; top: -6px; z-index: 10;">
               <div class="w-3 h-3 bg-emerald-400 border border-white rotate-45 rounded-xs shadow-md"></div>
             </div>
 
@@ -228,9 +228,24 @@ export class LeafletMapProvider implements IMapProvider {
     speed: number = 22,
     vehicleType?: string
   ): void {
+    // 1. Move the Leaflet marker coordinates immediately
     marker.setLatLng([coords.lat, coords.lng]);
-    const updatedIcon = this.buildDealerVehicleIcon(vehicleType, heading, speed);
-    marker.setIcon(updatedIcon);
+
+    // 2. High performance in-place DOM update without resetting icon / DOM tree
+    const el = marker.getElement();
+    if (el) {
+      const arrowWrap = el.querySelector<HTMLElement>('.bearing-arrow-wrap');
+      if (arrowWrap) {
+        arrowWrap.style.transform = `rotate(${heading || 0}deg)`;
+      }
+      const speedSpan = el.querySelector<HTMLElement>('.vehicle-speed-text');
+      if (speedSpan) {
+        speedSpan.textContent = `${speed} km/h`;
+      }
+    } else {
+      const updatedIcon = this.buildDealerVehicleIcon(vehicleType, heading, speed);
+      marker.setIcon(updatedIcon);
+    }
   }
 
   // Fetch actual driving road polyline and turn steps using free OSRM Routing Engine

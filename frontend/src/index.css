@@ -34,6 +34,12 @@
   border: none;
 }
 
+/* Smooth interpolation for live moving vehicle marker */
+.leaflet-marker-icon.custom-dealer-pin-wrap {
+  transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
 /* Leaflet Popup Styling */
 .leaflet-popup-content-wrapper {
   border-radius: 1rem;

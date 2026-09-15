@@ -110,8 +110,10 @@ export class InternalDealerController {
     try {
       const { orderId, dealerId, coordinates, heading, speed } = req.body;
 
-      // Also update dealer snapshot location
-      await DealerGatewayService.updateDealerLocation(dealerId, coordinates[0], coordinates[1]);
+      // Update dealer snapshot location in background without blocking live order dispatch
+      DealerGatewayService.updateDealerLocation(dealerId, coordinates[0], coordinates[1]).catch((err) =>
+        console.warn('Background dealer snapshot location update warning:', err.message)
+      );
 
       if (orderId) {
         const order = await OrderService.updateDealerLiveLocation(

@@ -40,6 +40,11 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   const consumerMarkerRef = useRef<L.Marker | null>(null);
   const routeGroupRef = useRef<L.FeatureGroup | null>(null);
 
+  const prevDealerCoordsRef = useRef<[number, number] | null>(null);
+  const lastRouteFetchCoordsRef = useRef<[number, number] | null>(null);
+  const lastRouteFetchTimeRef = useRef<number>(0);
+  const hasInitialFitRef = useRef<boolean>(false);
+
   const [tileMode, setTileMode] = useState<MapTileMode>('street');
   const [routeInfo, setRouteInfo] = useState<DrivingRouteResult | null>(null);
 
@@ -106,11 +111,12 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
         dealerMarkerRef.current = null;
         consumerMarkerRef.current = null;
         routeGroupRef.current = null;
+        hasInitialFitRef.current = false;
       }
     };
   }, [safeLng, safeLat, pickupAddress]);
 
-  // Update live moving dealer marker & road-snapped OSRM route
+  // Real-Time Dealer Marker Movement & Throttled Route Calculation
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -120,62 +126,92 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
       lat: safeLat,
     };
 
-    const dealerCoords =
+    // Determine actual coordinates
+    const hasValidCoords =
       Array.isArray(dealerLocation?.coordinates) &&
       dealerLocation.coordinates.length === 2 &&
-      dealerLocation.coordinates[0] !== 0
-        ? dealerLocation.coordinates
-        : [safeLng + 0.007, safeLat + 0.006];
+      dealerLocation.coordinates[0] !== 0 &&
+      !isNaN(dealerLocation.coordinates[0]);
+
+    const dealerCoords: [number, number] = hasValidCoords
+      ? dealerLocation!.coordinates
+      : [safeLng + 0.007, safeLat + 0.006];
 
     const dealerPoint: MapCoordinates = {
       lng: dealerCoords[0],
       lat: dealerCoords[1],
     };
 
-    let heading = dealerLocation?.heading || 45;
-    const speed = dealerLocation?.speed || 24;
+    // Calculate heading: prioritize device GPS heading, then bearing between real consecutive pings
+    let heading = dealerLocation?.heading || 0;
+    if (!heading && prevDealerCoordsRef.current) {
+      heading = mapService.calculateBearing(
+        [prevDealerCoordsRef.current[1], prevDealerCoordsRef.current[0]],
+        [dealerCoords[1], dealerCoords[0]]
+      );
+    }
+    if (!heading) heading = 45;
+    prevDealerCoordsRef.current = dealerCoords;
 
-    // Fetch accurate road route from OSRM
-    mapService.fetchDrivingRoute(dealerPoint, consumerPoint).then((route) => {
-      setRouteInfo(route);
+    const speed = dealerLocation?.speed || 22;
 
-      // Compute heading from first 2 road points if available
-      if (route.coordinates.length >= 2) {
-        heading = mapService.calculateBearing(
-          route.coordinates[0],
-          route.coordinates[1]
-        );
-      }
+    // 1. INSTANT MARKER POSITION UPDATE (0ms latency, does not wait on network or OSRM)
+    if (!dealerMarkerRef.current) {
+      dealerMarkerRef.current = mapService.createDealerMarker(
+        map,
+        dealerPoint,
+        dealerName,
+        heading,
+        speed,
+        dealerVehicle
+      );
+    } else {
+      mapService.updateDealerMarker(
+        dealerMarkerRef.current,
+        dealerPoint,
+        heading,
+        speed,
+        dealerVehicle
+      );
+    }
 
-      // Update or create dealer vehicle marker with custom vehicle symbol
-      if (!dealerMarkerRef.current) {
-        dealerMarkerRef.current = mapService.createDealerMarker(
-          map,
-          dealerPoint,
-          dealerName,
-          heading,
-          speed,
-          dealerVehicle
-        );
-      } else {
-        mapService.updateDealerMarker(
-          dealerMarkerRef.current,
-          dealerPoint,
-          heading,
-          speed,
-          dealerVehicle
-        );
-      }
-
-      // Draw real road polyline
-      if (routeGroupRef.current) {
-        routeGroupRef.current.remove();
-      }
-      routeGroupRef.current = mapService.drawRoute(map, route.coordinates);
-
-      // Fit bounds cleanly
+    // 2. Initial camera framing once both customer and dealer are on map
+    if (!hasInitialFitRef.current) {
       mapService.fitBounds(map, [consumerPoint, dealerPoint]);
-    });
+      hasInitialFitRef.current = true;
+    }
+
+    // 3. Throttled & Cached OSRM Road Route Fetching
+    // Only re-fetch if route is not loaded yet, or dealer moved > 75m, or > 15s elapsed
+    const now = Date.now();
+    const distSinceLastFetch = lastRouteFetchCoordsRef.current
+      ? mapService.calculateDirectDistance(
+          { lng: lastRouteFetchCoordsRef.current[0], lat: lastRouteFetchCoordsRef.current[1] },
+          dealerPoint
+        )
+      : 999;
+    const timeSinceLastFetch = now - lastRouteFetchTimeRef.current;
+
+    const shouldFetchRoute =
+      !routeInfo || distSinceLastFetch > 0.075 || (timeSinceLastFetch > 15000 && distSinceLastFetch > 0.02);
+
+    if (shouldFetchRoute) {
+      lastRouteFetchCoordsRef.current = dealerCoords;
+      lastRouteFetchTimeRef.current = now;
+
+      mapService
+        .fetchDrivingRoute(dealerPoint, consumerPoint)
+        .then((route) => {
+          setRouteInfo(route);
+          if (routeGroupRef.current) {
+            routeGroupRef.current.remove();
+          }
+          routeGroupRef.current = mapService.drawRoute(map, route.coordinates);
+        })
+        .catch((err) => {
+          console.warn('Road route sync skipped, keeping current route polyline:', err);
+        });
+    }
   }, [dealerLocation, safeLng, safeLat, dealerName, dealerVehicle]);
 
   // Layer toggle

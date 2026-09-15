@@ -342,14 +342,16 @@ export class OrderService {
       distanceKm,
     };
 
-    order.dealerLiveLocation = locationUpdate;
-    await order.save();
-
+    // 1. Immediately emit live location to consumer socket with ZERO delay
     socketEvents.emitDealerLocation(
       order.orderId,
       order.consumerId.toString(),
       locationUpdate
     );
+
+    // 2. Persist to DB asynchronously
+    order.dealerLiveLocation = locationUpdate;
+    await order.save();
 
     return order;
   }
