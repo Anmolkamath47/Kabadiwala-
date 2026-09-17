@@ -119,28 +119,26 @@ export class LeafletMapProvider implements IMapProvider {
     const consumerIcon = L.divIcon({
       className: 'custom-consumer-pin-wrap',
       html: `
-        <div class="relative flex items-center justify-center">
-          <!-- Pulse wave ring -->
-          <div class="absolute w-12 h-12 rounded-full bg-emerald-500/30 animate-ping"></div>
-          <!-- Outer circular marker -->
-          <div class="relative w-10 h-10 bg-gradient-to-tr from-emerald-600 to-teal-500 rounded-full border-2 border-white shadow-xl flex items-center justify-center text-white z-10">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        <div class="relative flex items-center justify-center select-none" style="width: 52px; height: 52px;">
+          <!-- Soft green concentric delivery zone on the ground (matching Zomato reference) -->
+          <div class="absolute w-12 h-12 rounded-full bg-emerald-500/20 border-2 border-emerald-500/50 animate-pulse"></div>
+          <!-- Black circular house pin -->
+          <div class="relative w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center border-2 border-white shadow-xl z-10">
+            <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
             </svg>
           </div>
-          <!-- Pointer tip -->
-          <div class="absolute -bottom-1 w-3 h-3 bg-emerald-700 rotate-45 z-0 shadow-sm"></div>
         </div>
       `,
-      iconSize: [40, 44],
-      iconAnchor: [20, 42],
-      popupAnchor: [0, -42],
+      iconSize: [52, 52],
+      iconAnchor: [26, 26],
+      popupAnchor: [0, -26],
     });
 
     const marker = L.marker([coords.lat, coords.lng], { icon: consumerIcon }).addTo(map);
     marker.bindPopup(`
       <div style="font-family: system-ui, sans-serif; padding: 4px;">
-        <strong style="color: #059669; font-size: 13px;">📍 ${title}</strong>
+        <strong style="color: #0f172a; font-size: 13px;">📍 ${title}</strong>
         <div style="font-size: 11px; color: #475569; margin-top: 2px;">Your doorstep scrap pickup point</div>
       </div>
     `);
@@ -150,7 +148,7 @@ export class LeafletMapProvider implements IMapProvider {
   buildDealerVehicleIcon(
     vehicleType?: string,
     heading: number = 0,
-    speed: number = 22
+    speed?: number
   ): L.DivIcon {
     const safeHeading = heading || 0;
     const vehicle = getVehicleDetails(vehicleType);
@@ -158,37 +156,16 @@ export class LeafletMapProvider implements IMapProvider {
     return L.divIcon({
       className: 'custom-dealer-pin-wrap',
       html: `
-        <div class="relative flex flex-col items-center justify-center">
-          <!-- Live Vehicle Speed Tag Pill -->
-          <div class="mb-1 bg-slate-900/95 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-slate-700 flex items-center space-x-1 whitespace-nowrap">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span class="vehicle-speed-text">${speed} km/h</span>
-          </div>
-
-          <!-- Vehicle Icon Container with Pointer Indicator -->
-          <div class="relative flex items-center justify-center">
-            <!-- Rotating Directional Bearing Pointer Arrow -->
-            <div class="bearing-arrow-wrap flex items-center justify-center pointer-events-none" style="transform: rotate(${safeHeading}deg); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); position: absolute; top: -6px; z-index: 10;">
-              <div class="w-3 h-3 bg-emerald-400 border border-white rotate-45 rounded-xs shadow-md"></div>
-            </div>
-
-            <!-- Vehicle Icon Box with Gradient & Ring -->
-            <div class="relative w-12 h-12 bg-gradient-to-tr ${vehicle.bgGradient} rounded-2xl border-2 border-white shadow-2xl flex items-center justify-center text-white ring-4 ${vehicle.ringColor}">
-              <div class="flex items-center justify-center">
-                ${vehicle.svgHtml}
-              </div>
-            </div>
-          </div>
-
-          <!-- Badge for Vehicle Category -->
-          <div class="mt-1 bg-slate-950/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-md shadow-md border border-slate-700 whitespace-nowrap flex items-center space-x-1">
-            <span>${vehicle.badge}</span>
+        <div class="dealer-live-vehicle-marker relative flex items-center justify-center select-none" style="pointer-events: auto; width: 56px; height: 86px;">
+          <!-- Rotating Photorealistic Top-Down Vehicle Model (Oriented along road heading) -->
+          <div class="dealer-vehicle-rotating-wrap relative flex items-center justify-center pointer-events-none" style="transform: rotate(${safeHeading}deg); transform-origin: center center; transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1); filter: drop-shadow(0 5px 8px rgba(0,0,0,0.38));">
+            ${vehicle.topDownSvgHtml}
           </div>
         </div>
       `,
-      iconSize: [68, 80],
-      iconAnchor: [34, 52],
-      popupAnchor: [0, -52],
+      iconSize: [56, 86],
+      iconAnchor: [28, 43],
+      popupAnchor: [0, -43],
     });
   }
 
@@ -234,16 +211,12 @@ export class LeafletMapProvider implements IMapProvider {
     // 2. High performance in-place DOM update without resetting icon / DOM tree
     const el = marker.getElement();
     if (el) {
-      const arrowWrap = el.querySelector<HTMLElement>('.bearing-arrow-wrap');
-      if (arrowWrap) {
-        arrowWrap.style.transform = `rotate(${heading || 0}deg)`;
-      }
-      const speedSpan = el.querySelector<HTMLElement>('.vehicle-speed-text');
-      if (speedSpan) {
-        speedSpan.textContent = `${speed} km/h`;
+      const rotatingWrap = el.querySelector<HTMLElement>('.dealer-vehicle-rotating-wrap');
+      if (rotatingWrap) {
+        rotatingWrap.style.transform = `rotate(${heading || 0}deg)`;
       }
     } else {
-      const updatedIcon = this.buildDealerVehicleIcon(vehicleType, heading, speed);
+      const updatedIcon = this.buildDealerVehicleIcon(vehicleType, heading);
       marker.setIcon(updatedIcon);
     }
   }
@@ -306,29 +279,28 @@ export class LeafletMapProvider implements IMapProvider {
     }
   }
 
-  // Draw road-snapped route with high-contrast dual layer polyline
+  // Draw road-snapped route with high-contrast dual layer polyline (Zomato/Google Maps Blue)
   drawRoute(map: L.Map, pathCoordinates: [number, number][]): L.FeatureGroup {
     if (!pathCoordinates || pathCoordinates.length === 0) {
       return L.featureGroup().addTo(map);
     }
 
-    // Outer glow casing line
+    // Outer casing line for contrast on light Google map tiles
     const shadowLine = L.polyline(pathCoordinates, {
-      color: '#064e3b',
+      color: '#1d4ed8',
       weight: 8,
-      opacity: 0.45,
+      opacity: 0.5,
       lineCap: 'round',
       lineJoin: 'round',
     });
 
-    // Foreground High-Contrast Navigation Line
+    // Foreground Solid Navigation Blue Line (matching Zomato/Google Maps reference)
     const mainLine = L.polyline(pathCoordinates, {
-      color: '#10b981',
-      weight: 5,
-      opacity: 0.95,
+      color: '#2563eb',
+      weight: 5.5,
+      opacity: 1,
       lineCap: 'round',
       lineJoin: 'round',
-      dashArray: '8, 8',
     });
 
     const routeGroup = L.featureGroup([shadowLine, mainLine]).addTo(map);

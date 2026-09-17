@@ -19,6 +19,12 @@ import {
   Share2,
   AlertCircle,
   HelpCircle,
+  RefreshCw,
+  MessageSquare,
+  X,
+  Send,
+  ExternalLink,
+  ChevronRight,
 } from 'lucide-react';
 import { getVehicleDetails } from '../utils/vehicleUtils';
 
@@ -41,7 +47,25 @@ export const ActiveOrderScreen: React.FC = () => {
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
 
-  const vehicleDetails = getVehicleDetails(order?.dealerSnapshot?.vehicleType);
+  // Live Tracking state matching reference layout
+  const [etaMins, setEtaMins] = useState<number>(7);
+  const [isRefreshingTracking, setIsRefreshingTracking] = useState<boolean>(false);
+  const [showMessageBanner, setShowMessageBanner] = useState<boolean>(true);
+  const [selectedVehicleType, setSelectedVehicleType] = useState<string>(
+    order?.dealerSnapshot?.vehicleType || 'Tata Ace Mini Truck'
+  );
+  const [selectedTip, setSelectedTip] = useState<number | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
+  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'dealer' | 'consumer'; text: string; time: string }>>([
+    {
+      sender: 'dealer',
+      text: 'Hello! I am on the way with a certified digital scale. Please keep your scrap ready at the doorstep.',
+      time: 'Just now',
+    },
+  ]);
+  const [chatInput, setChatInput] = useState<string>('');
+
+  const activeVehicleDetails = getVehicleDetails(selectedVehicleType || order?.dealerSnapshot?.vehicleType);
 
   useEffect(() => {
     if (orderId) {
@@ -93,6 +117,53 @@ export const ActiveOrderScreen: React.FC = () => {
     }
   };
 
+  const isLiveTracking = ['ACCEPTED', 'DEALER_EN_ROUTE', 'ARRIVED', 'OTP_PENDING'].includes(order.status);
+
+  const handleRefreshTracking = () => {
+    setIsRefreshingTracking(true);
+    fetchOrder(order.orderId);
+    setTimeout(() => {
+      setIsRefreshingTracking(false);
+    }, 800);
+  };
+
+  const handleShareTracking = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: 'Scrapwala Live Tracking',
+        text: `Track scrap pickup #${order.orderId} live!`,
+        url: window.location.href,
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      alert('Tracking link copied to clipboard!');
+    }
+  };
+
+  const handleSendMessage = (textToSend?: string) => {
+    const txt = (textToSend || chatInput).trim();
+    if (!txt) return;
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        sender: 'consumer',
+        text: txt,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
+    setChatInput('');
+    setTimeout(() => {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          sender: 'dealer',
+          text: `Got it! Reaching your doorstep in approx ${etaMins} mins.`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+    }, 1200);
+  };
+
   const toggleTag = (tag: string) => {
     if (selectedTags.includes(tag)) {
       setSelectedTags(selectedTags.filter((t) => t !== tag));
@@ -115,26 +186,138 @@ export const ActiveOrderScreen: React.FC = () => {
       <Toast />
 
       {/* Header */}
-      <div className="bg-white px-4 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 z-20">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => navigate('/')}
-            className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 transition"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div>
-            <div className="flex items-center space-x-2">
-              <h1 className="text-sm font-extrabold text-slate-900">Pickup #{order.orderId}</h1>
+      {isLiveTracking ? (
+        <div className="bg-[#24963f] text-white px-4 pt-3 pb-4 shadow-md sticky top-0 z-30 select-none">
+          {/* Top Bar with back, title, share */}
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="w-8 h-8 rounded-full bg-black/15 hover:bg-black/25 flex items-center justify-center transition active:scale-95 text-white cursor-pointer"
+              title="Back to Home"
+            >
+              <ArrowLeft className="w-4 h-4 text-white" />
+            </button>
+
+            <div className="text-center truncate px-2 max-w-[220px]">
+              <span className="text-xs font-semibold text-white/95 truncate block">
+                {order.dealerSnapshot?.businessName || 'Flying Aromas'}
+              </span>
             </div>
-            <p className="text-[10px] text-slate-400">
-              {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · Live State
-            </p>
+
+            <button
+              type="button"
+              onClick={handleShareTracking}
+              className="w-8 h-8 rounded-full bg-black/15 hover:bg-black/25 flex items-center justify-center transition active:scale-95 text-white cursor-pointer"
+              title="Share Tracking"
+            >
+              <Share2 className="w-4 h-4 text-white" />
+            </button>
+          </div>
+
+          {/* Headline: Order is on the way 🤘 */}
+          <div className="text-center mt-2.5">
+            <h1 className="text-2xl sm:text-[26px] font-black tracking-tight text-white flex items-center justify-center space-x-2">
+              <span>Order is on the way</span>
+              <span className="text-2xl">🤘</span>
+            </h1>
+
+            {/* Arriving in X mins badge with refresh */}
+            <div className="mt-2.5 inline-flex items-center space-x-2 bg-black/20 hover:bg-black/30 backdrop-blur-xs px-4 py-1.5 rounded-full border border-white/15 text-xs font-semibold shadow-inner">
+              <span>Arriving in {etaMins} mins</span>
+              <button
+                type="button"
+                onClick={handleRefreshTracking}
+                className={`p-0.5 text-white/90 hover:text-white transition active:scale-90 cursor-pointer ${
+                  isRefreshingTracking ? 'animate-spin' : ''
+                }`}
+                title="Refresh ETA & Location"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-white" />
+              </button>
+            </div>
           </div>
         </div>
+      ) : (
+        <div className="bg-white px-4 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 z-20">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => navigate('/')}
+              className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 transition"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h1 className="text-sm font-extrabold text-slate-900">Pickup #{order.orderId}</h1>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · Live State
+              </p>
+            </div>
+          </div>
 
-        <OrderStatusBadge status={order.status} size="sm" />
-      </div>
+          <OrderStatusBadge status={order.status} size="sm" />
+        </div>
+      )}
+
+      {/* Message Prompt Banner (Zomato style) */}
+      {isLiveTracking && showMessageBanner && (
+        <div className="bg-white px-4 py-2.5 border-b border-slate-200 shadow-xs flex items-center justify-between z-20">
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 flex-shrink-0 border border-slate-200">
+              <MessageSquare className="w-3.5 h-3.5" />
+            </div>
+            <div className="text-xs text-slate-700 truncate">
+              You have <strong className="text-slate-900 font-bold">1 new message</strong> from the delivery partner
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
+            <button
+              type="button"
+              onClick={() => setIsChatOpen(true)}
+              className="text-xs font-black text-[#dc2626] hover:text-rose-700 tracking-wide uppercase px-1 transition cursor-pointer"
+            >
+              CHAT NOW
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowMessageBanner(false)}
+              className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Vehicle Model Selector Bar for instant testing of all 3 vehicles */}
+      {isLiveTracking && (
+        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200/80 flex items-center justify-between text-xs overflow-x-auto select-none">
+          <span className="text-slate-500 font-bold flex-shrink-0 mr-2 text-[11px]">Dealer Vehicle on Road:</span>
+          <div className="flex items-center space-x-1.5 flex-shrink-0">
+            {[
+              { id: 'bike', label: '🛵 Bike', value: 'Delivery Scooter / Bike' },
+              { id: 'truck', label: '🛻 Pickup Truck', value: 'Tata Ace Mini Truck' },
+              { id: 'auto', label: '🛺 3-Wheeler', value: '3-Wheeler Auto Loader' },
+            ].map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setSelectedVehicleType(v.value)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition whitespace-nowrap cursor-pointer ${
+                  activeVehicleDetails.category === v.id
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Dynamic Content by State */}
       <div className="p-4 space-y-4 overflow-y-auto flex-1">
@@ -187,48 +370,111 @@ export const ActiveOrderScreen: React.FC = () => {
               dealerLocation={dealerLiveLocation || order.dealerLiveLocation}
               pickupAddress={order.pickupAddress}
               dealerName={order.dealerSnapshot?.businessName || 'Scrap Collector Partner'}
-              dealerVehicle={order.dealerSnapshot?.vehicleType || 'Electric Mini Loader'}
+              dealerVehicle={selectedVehicleType || order.dealerSnapshot?.vehicleType || 'Tata Ace Mini Truck'}
+              onEtaUpdate={(mins) => setEtaMins(mins)}
+              onCouponClick={() => alert('Special ₹50 scrap bonus voucher applied to your payout!')}
+              className="h-[360px] sm:h-[400px]"
             />
 
-            {/* OTP Display Card */}
-            <OtpDisplayCard otpCode={order.otp?.code || '----'} isVerified={order.otp?.isVerified || false} />
+            {/* Promo Card matching Zomato Screenshot */}
+            <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-card flex items-center justify-between">
+              <div className="flex items-center space-x-3 min-w-0">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500 via-pink-500 to-rose-400 flex items-center justify-center text-white flex-shrink-0 shadow-md">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-xs font-black text-slate-900 truncate">Make your next scrap pickup special 😍</h4>
+                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                    Iconic rates from faraway places delivered to your doorstep!
+                  </p>
+                  <div className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center mt-0.5 cursor-pointer">
+                    <span>Order from Scrapwala Specials</span>
+                    <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                  </div>
+                </div>
+              </div>
+            </div>
 
-            {/* Dealer Contact Card */}
+            {/* Dealer / Driver Profile Card matching Zomato Screenshot */}
             <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-card">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div
-                    className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${vehicleDetails.bgGradient} text-white flex items-center justify-center font-black text-lg border-2 border-white shadow-md ring-2 ${vehicleDetails.ringColor}`}
-                    dangerouslySetInnerHTML={{ __html: vehicleDetails.svgHtml }}
-                  />
-                  <div>
-                    <div className="flex items-center space-x-1.5 flex-wrap">
-                      <h3 className="text-sm font-bold text-slate-900">
-                        {order.dealerSnapshot?.businessName || 'Scrap Collector Partner'}
-                      </h3>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${vehicleDetails.tagColor}`}>
-                        {vehicleDetails.emoji} {vehicleDetails.category.toUpperCase()}
-                      </span>
+                <div className="flex items-center space-x-3 min-w-0">
+                  <div className="relative flex-shrink-0">
+                    <div className="w-12 h-12 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-md">
+                      <img
+                        src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+                        alt="Partner"
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Driver: {order.dealerSnapshot?.contactPerson || 'Assigned Driver'}
-                      {order.dealerSnapshot?.vehicleNumber ? ` · ${order.dealerSnapshot.vehicleNumber}` : ''}
-                    </p>
-                    <p className="text-[11px] font-medium text-emerald-700">
-                      Vehicle: {order.dealerSnapshot?.vehicleType || vehicleDetails.name}
+                    <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white shadow-xs"></span>
+                  </div>
+
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-extrabold text-slate-900 truncate">
+                      {order.dealerSnapshot?.contactPerson || 'Chandan Kumar Rajbhar'}
+                    </h3>
+                    <p className="text-xs text-slate-500 truncate mt-0.5">
+                      100+ five-star scrap pickups · {activeVehicleDetails.badge}
                     </p>
                   </div>
                 </div>
 
-                <a
-                  href={order.dealerSnapshot?.phone ? `tel:${order.dealerSnapshot.phone}` : '#'}
-                  className="w-10 h-10 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition shadow-xs"
-                  title="Call Scrap Dealer"
-                >
-                  <Phone className="w-4 h-4" />
-                </a>
+                <div className="flex items-center space-x-2 flex-shrink-0 ml-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsChatOpen(true)}
+                    className="relative w-10 h-10 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 transition cursor-pointer shadow-xs"
+                    title="Chat with Scrap Partner"
+                  >
+                    <MessageSquare className="w-4 h-4 text-slate-600" />
+                    <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-rose-500 border-2 border-white"></span>
+                  </button>
+
+                  <a
+                    href={order.dealerSnapshot?.phone ? `tel:${order.dealerSnapshot.phone}` : '#'}
+                    className="w-10 h-10 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 transition shadow-xs cursor-pointer"
+                    title="Call Scrap Partner"
+                  >
+                    <Phone className="w-4 h-4" />
+                  </a>
+                </div>
               </div>
             </div>
+
+            {/* Thank Driver / Tipping Card matching Zomato Screenshot */}
+            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-card space-y-2.5">
+              <div>
+                <h4 className="text-xs font-black text-slate-900">
+                  Thank {(order.dealerSnapshot?.contactPerson || 'Chandan').split(' ')[0]} by leaving a tip
+                </h4>
+                <p className="text-[11px] text-slate-500">100% of the tip will go to your scrap pickup partner</p>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {[20, 30, 50, 100].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setSelectedTip(selectedTip === amt ? null : amt)}
+                    className={`py-2 px-1 rounded-2xl text-xs font-black transition border cursor-pointer ${
+                      selectedTip === amt
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-slate-50 text-slate-800 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    ₹{amt}
+                  </button>
+                ))}
+              </div>
+              {selectedTip && (
+                <p className="text-[11px] text-emerald-700 font-bold text-center">
+                  ₹{selectedTip} tip will be credited to partner upon doorstep completion!
+                </p>
+              )}
+            </div>
+
+            {/* Doorstep Verification OTP Card (100% Intact) */}
+            <OtpDisplayCard otpCode={order.otp?.code || '----'} isVerified={order.otp?.isVerified || false} />
 
             {/* Cancel Button if still en route */}
             {['ACCEPTED', 'DEALER_EN_ROUTE'].includes(order.status) && (
@@ -236,7 +482,7 @@ export const ActiveOrderScreen: React.FC = () => {
                 type="button"
                 onClick={handleCancel}
                 disabled={isCancelling}
-                className="text-xs font-semibold text-slate-500 hover:text-rose-600 py-2 w-full text-center transition"
+                className="text-xs font-semibold text-slate-500 hover:text-rose-600 py-2 w-full text-center transition cursor-pointer"
               >
                 {isCancelling ? 'Cancelling...' : 'Need to cancel this pickup?'}
               </button>
@@ -460,6 +706,120 @@ export const ActiveOrderScreen: React.FC = () => {
           <p className="text-xs text-slate-600">{order.pickupAddress}</p>
         </div>
       </div>
+
+      {/* Quick In-App Chat Modal with Scrap Dealer */}
+      {isChatOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in slide-in-from-bottom duration-200">
+            {/* Chat Header */}
+            <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center space-x-2.5 min-w-0">
+                <div className="relative flex-shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-slate-700 overflow-hidden border border-slate-600">
+                    <img
+                      src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+                      alt="Dealer"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-slate-900"></span>
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-white truncate">
+                    {order.dealerSnapshot?.contactPerson || 'Chandan Kumar'}
+                  </h3>
+                  <p className="text-[10px] text-emerald-400 font-semibold truncate">Scrap Dealer Partner · Active</p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
+                {order.dealerSnapshot?.phone && (
+                  <a
+                    href={`https://wa.me/91${order.dealerSnapshot.phone.replace(/[^0-9]/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white transition text-xs font-bold shadow-xs"
+                    title="Open WhatsApp"
+                  >
+                    WhatsApp
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsChatOpen(false)}
+                  className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Chat Message List */}
+            <div className="p-4 space-y-3 overflow-y-auto flex-1 bg-slate-50 min-h-[220px]">
+              {chatMessages.map((msg, idx) => (
+                <div
+                  key={idx}
+                  className={`flex flex-col ${msg.sender === 'consumer' ? 'items-end' : 'items-start'}`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed ${
+                      msg.sender === 'consumer'
+                        ? 'bg-emerald-600 text-white rounded-tr-xs shadow-xs'
+                        : 'bg-white text-slate-800 border border-slate-200 rounded-tl-xs shadow-xs'
+                    }`}
+                  >
+                    {msg.text}
+                  </div>
+                  <span className="text-[9px] text-slate-400 mt-1 px-1">{msg.time}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Quick Response Chips */}
+            <div className="p-2.5 bg-white border-t border-slate-100 flex items-center space-x-1.5 overflow-x-auto text-[11px] select-none">
+              {[
+                'Where have you reached?',
+                'I am at the entrance gate',
+                'Please call when nearby',
+                'Scrap is packed & ready',
+              ].map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => handleSendMessage(chip)}
+                  className="px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium whitespace-nowrap cursor-pointer transition active:scale-95 border border-slate-200"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+
+            {/* Chat Input Bar */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendMessage();
+              }}
+              className="p-3 bg-white border-t border-slate-200 flex items-center space-x-2"
+            >
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Type a message to dealer..."
+                className="flex-1 bg-slate-100 border border-slate-200 rounded-full px-3.5 py-2 text-xs text-slate-800 outline-hidden focus:border-emerald-500 focus:bg-white transition"
+              />
+              <button
+                type="submit"
+                disabled={!chatInput.trim()}
+                className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white flex items-center justify-center transition cursor-pointer flex-shrink-0"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
