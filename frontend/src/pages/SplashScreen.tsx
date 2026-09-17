@@ -32,7 +32,7 @@ export const SplashScreen: React.FC = () => {
         {/* Brand Logo */}
         <div className="relative">
           <div className="w-28 h-28 rounded-3xl bg-white p-1.5 flex items-center justify-center shadow-2xl ring-8 ring-emerald-500/20 overflow-hidden">
-            <img src="/logo.png" alt="Scrapify" className="w-full h-full object-contain rounded-2xl" />
+            <img src="/logo.png" alt="Scrapwala" className="w-full h-full object-contain rounded-2xl" />
           </div>
           <div className="absolute -top-2 -right-2 bg-amber-400 text-slate-900 p-1.5 rounded-full shadow">
             <Sparkles className="w-4 h-4 fill-slate-900" />
@@ -40,7 +40,7 @@ export const SplashScreen: React.FC = () => {
         </div>
 
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-white">Scrapify</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-white">Scrapwala</h1>
           <p className="text-xs text-emerald-300 font-semibold mt-1">
             Doorstep Scrap Pickup & Best Rates
           </p>

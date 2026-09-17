@@ -376,7 +376,7 @@ export class LeafletMapProvider implements IMapProvider {
       const res = await fetch(url, {
         headers: {
           'Accept-Language': 'en',
-          'User-Agent': 'Kabadiwala-Consumer-App/1.0',
+          'User-Agent': 'Scrapwala-Consumer-App/1.0',
         },
       });
       if (!res.ok) throw new Error('Geocoding service unavailable');
@@ -407,7 +407,7 @@ export class LeafletMapProvider implements IMapProvider {
       const res = await fetch(url, {
         headers: {
           'Accept-Language': 'en',
-          'User-Agent': 'Kabadiwala-Consumer-App/1.0',
+          'User-Agent': 'Scrapwala-Consumer-App/1.0',
         },
       });
       if (!res.ok) return [];

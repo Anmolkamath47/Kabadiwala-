@@ -45,10 +45,10 @@ export const LoginScreen: React.FC = () => {
       <div className="pt-8">
         <div className="flex items-center space-x-3">
           <div className="w-12 h-12 rounded-2xl bg-white p-0.5 flex items-center justify-center shadow-md overflow-hidden border border-slate-100">
-            <img src="/logo.png" alt="Scrapify" className="w-full h-full object-contain rounded-xl" />
+            <img src="/logo.png" alt="Scrapwala" className="w-full h-full object-contain rounded-xl" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight">Scrapify</h1>
+            <h1 className="text-xl font-black text-slate-900 tracking-tight">Scrapwala</h1>
             <p className="text-xs font-semibold text-emerald-600">Consumer Scrap App</p>
           </div>
         </div>
@@ -101,7 +101,7 @@ export const LoginScreen: React.FC = () => {
           <span>100% Verified Scrap Dealers · Digital Weighing</span>
         </div>
         <p className="text-[10px] text-slate-400 mt-2">
-          By continuing, you agree to Scrapify Terms of Service & Privacy Policy.
+          By continuing, you agree to Scrapwala Terms of Service & Privacy Policy.
         </p>
       </div>
     </div>

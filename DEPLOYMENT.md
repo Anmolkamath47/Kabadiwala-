@@ -1,12 +1,39 @@
-# 🚀 Deployment Guide: Kabadiwala (Render & Vercel)
+# 🚀 Deployment & Vercel Guide: Scrapwala (Render & Vercel)
 
-This repository contains the complete **Kabadiwala Consumer Scrap Pickup Application** consisting of:
+This repository contains the complete **Scrapwala Consumer Scrap Pickup Application** consisting of:
 - **Backend**: Express + TypeScript + Socket.IO server (`/backend`)
 - **Frontend**: Vite + React + Tailwind CSS consumer application (`/frontend`)
 
 ---
 
-## 1. Deploy Backend to Render
+## 1. Deploy Frontend to Vercel
+
+### Setting up or Renaming your Project on Vercel:
+1. Log into [Vercel](https://vercel.com).
+2. If importing fresh:
+   - Click **Add New...** → **Project**.
+   - Import your GitHub repository: `Anmolkamath47/Kabadiwala-`.
+   - **Project Name**: `scrapwala`
+   - **Framework Preset**: `Vite`
+   - **Root Directory**: Click *Edit* and select `frontend`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+3. If renaming an existing project:
+   - Click your project from the Vercel dashboard.
+   - Go to **Settings** → **General**.
+   - Under **Project Name**, update to: `scrapwala` and click **Save**.
+   - Vercel will update your default domain to `scrapwala.vercel.app` (or `scrapwala-<suffix>.vercel.app`).
+4. **Environment Variables**:
+   Under **Settings** → **Environment Variables**, ensure you have:
+   | Variable | Value |
+   | :--- | :--- |
+   | `VITE_API_BASE_URL` | `https://<your-render-backend-url>.onrender.com/api` |
+   | `VITE_SOCKET_URL` | `https://<your-render-backend-url>.onrender.com` |
+5. Click **Deploy** / **Redeploy** so the new build triggers with the updated name and assets.
+
+---
+
+## 2. Deploy Backend to Render
 
 ### Option A: Automatic via Render Blueprint (`render.yaml`)
 1. Log into your [Render Dashboard](https://dashboard.render.com).
@@ -30,9 +57,9 @@ This repository contains the complete **Kabadiwala Consumer Scrap Pickup Applica
    | :--- | :--- |
    | `NODE_ENV` | `production` |
    | `PORT` | `10000` (or Render's automatic port) |
-   | `CLIENT_APP_URL` | Your frontend Vercel URL (e.g., `https://kabadiwala.vercel.app`) |
-   | `DEALER_API_URL` | Render URL of the Kabadidealer backend (e.g., `https://kabadidealer-backend.onrender.com/api`) |
-   | `DEALER_SERVICE_API_KEY` | Shared secret key matching Kabadidealer backend (e.g. `kbad_shared_internal_secret_key_9988`) |
+   | `CLIENT_APP_URL` | Your frontend Vercel URL (e.g., `https://scrapwala.vercel.app`) |
+   | `DEALER_API_URL` | Render URL of the Scrapwala Dealer Partner backend (e.g., `https://kabadidealer-backend.onrender.com/api`) |
+   | `DEALER_SERVICE_API_KEY` | Shared secret key matching dealer backend (e.g. `kbad_shared_internal_secret_key_9988`) |
    | `JWT_SECRET` | Strong random 32+ character string |
    | `JWT_REFRESH_SECRET` | Strong random 32+ character string |
    | `MONGODB_URI` | MongoDB Atlas URI: `mongodb+srv://<user>:<password>@cluster.mongodb.net/kabadiwala` |
@@ -40,35 +67,15 @@ This repository contains the complete **Kabadiwala Consumer Scrap Pickup Applica
    | `OTP_DEMO_CODE` | `1234` |
 5. Click **Create Web Service**.
 6. Once deployed, note down your backend URL: `https://<service-name>.onrender.com`.
-
----
-
-## 2. Deploy Frontend to Vercel
-
-1. Log into [Vercel](https://vercel.com).
-2. Click **Add New...** → **Project**.
-3. Import your GitHub repository: `Anmolkamath47/Kabadiwala-`.
-4. In the configuration screen:
-   - **Framework Preset**: `Vite`
-   - **Root Directory**: Click *Edit* and select `frontend`
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-5. Expand **Environment Variables** and add:
-   | Variable | Value |
-   | :--- | :--- |
-   | `VITE_API_BASE_URL` | `https://<your-render-backend-url>.onrender.com/api` |
-   | `VITE_SOCKET_URL` | `https://<your-render-backend-url>.onrender.com` |
-6. Click **Deploy**.
-7. Once deployment is complete, your Vercel URL (e.g., `https://kabadiwala.vercel.app`) is live!
-8. Copy this Vercel URL and update `CLIENT_APP_URL` in your Render Backend environment variables.
+7. Remember: Whenever you change your Vercel project name or custom domain, update `CLIENT_APP_URL` on Render to match your new Vercel domain!
 
 ---
 
 ## 3. Production Verification Checklist
 
 - [ ] `/api/health` on Render backend returns `{"status":"healthy"}`.
-- [ ] `/api/health/connectivity` returns `{"crossAppConnectivity": {"connected": true}}` confirming mutual connection with Kabadidealer backend.
-- [ ] Vercel frontend loads without CORS errors in browser console.
-- [ ] Direct page refresh on any subroute (e.g., `/pickup`, `/orders`, `/profile`, `/rates`) works seamlessly thanks to `vercel.json` rewrites.
+- [ ] `/api/health/connectivity` returns `{"crossAppConnectivity": {"connected": true}}` confirming mutual connection with dealer partner backend.
+- [ ] Vercel frontend loads without CORS errors in browser console at `https://scrapwala.vercel.app`.
+- [ ] Browser tab displays **"Scrapwala - On-Demand Scrap Pickup & Best Scrap Rates"**.
+- [ ] Direct page refresh on any subroute (e.g., `/location`, `/booking-confirm`, `/orders`, `/profile`) works seamlessly thanks to `vercel.json` rewrites.
 - [ ] Real-time Socket.IO connection is established for live dealer tracking and order updates.
-

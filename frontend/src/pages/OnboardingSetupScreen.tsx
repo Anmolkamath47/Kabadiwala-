@@ -182,11 +182,11 @@ export const OnboardingSetupScreen: React.FC = () => {
           <div className="flex items-center space-x-2">
             <img
               src="/logo.png"
-              alt="Scrapify"
+              alt="Scrapwala"
               className="w-8 h-8 rounded-xl object-contain bg-white shadow-xs border border-slate-100 p-0.5"
             />
             <div>
-              <h1 className="text-sm font-black text-slate-900">Welcome to Scrapify</h1>
+              <h1 className="text-sm font-black text-slate-900">Welcome to Scrapwala</h1>
               <p className="text-[11px] text-slate-500">Quick 2-Step Setup</p>
             </div>
           </div>
@@ -503,7 +503,7 @@ export const OnboardingSetupScreen: React.FC = () => {
       <div className="p-3 bg-white border-t border-slate-200/80 text-center">
         <div className="flex items-center justify-center space-x-1.5 text-slate-500 text-[11px] font-medium">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <span>Verified Scrapify Network · Privacy Protected</span>
+          <span>Verified Scrapwala Network · Privacy Protected</span>
         </div>
       </div>
     </div>

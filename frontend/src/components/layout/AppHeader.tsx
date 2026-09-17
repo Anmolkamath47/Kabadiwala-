@@ -31,7 +31,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <h1 className="text-base font-bold text-slate-900 line-clamp-1">{title || 'Scrapify'}</h1>
+            <h1 className="text-base font-bold text-slate-900 line-clamp-1">{title || 'Scrapwala'}</h1>
           </div>
         ) : (
           <div className="flex items-center space-x-3 flex-1 min-w-0 pr-2">
@@ -41,11 +41,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             >
               <img
                 src="/logo.png"
-                alt="Scrapify"
+                alt="Scrapwala"
                 className="w-8 h-8 rounded-lg object-contain bg-white shadow-xs border border-slate-100 p-0.5"
               />
               <span className="font-extrabold text-emerald-700 tracking-tight text-lg hidden sm:inline">
-                Scrapify
+                Scrapwala
               </span>
             </button>
 

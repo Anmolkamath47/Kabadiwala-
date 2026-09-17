@@ -378,7 +378,7 @@ export const ProfileScreen: React.FC = () => {
           </div>
 
           <div
-            onClick={() => alert('Scrapify standard scrap recycling weights are certified by local authorities.')}
+            onClick={() => alert('Scrapwala standard scrap recycling weights are certified by local authorities.')}
             className="p-4 flex items-center justify-between hover:bg-slate-50 transition cursor-pointer"
           >
             <div className="flex items-center space-x-3">
@@ -399,7 +399,7 @@ export const ProfileScreen: React.FC = () => {
         </button>
 
         <div className="text-center text-[10px] text-slate-400">
-          Scrapify Consumer App · v1.0.0
+          Scrapwala Consumer App · v1.0.0
         </div>
       </main>
 
