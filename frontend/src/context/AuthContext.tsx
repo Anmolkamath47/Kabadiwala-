@@ -13,6 +13,7 @@ interface AuthContextType {
   setSelectedLocation: (loc: SavedAddress | null) => void;
   requestOtp: (phone: string) => Promise<{ message: string; demoOtp?: string }>;
   verifyOtpAndLogin: (phone: string, otp: string, name?: string) => Promise<{ isNewUser: boolean; isProfileCompleted: boolean; user: UserProfile }>;
+  loginWithPhone: (phone: string, name?: string) => Promise<{ isNewUser: boolean; isProfileCompleted: boolean; user: UserProfile }>;
   updateUserProfile: (updates: {
     name?: string;
     profileImage?: string;
@@ -155,6 +156,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithPhone = async (
+    phone: string,
+    name?: string
+  ): Promise<{ isNewUser: boolean; isProfileCompleted: boolean; user: UserProfile }> => {
+    let demoOtp = '1234';
+    try {
+      const res = await authService.requestOtp(phone);
+      if (res?.demoOtp) {
+        demoOtp = res.demoOtp;
+      }
+    } catch (e) {
+      console.warn('Silent OTP fallback on phone login:', e);
+    }
+    return verifyOtpAndLogin(phone, demoOtp, name);
+  };
+
   const updateUserProfile = async (updates: {
     name?: string;
     profileImage?: string;
@@ -275,6 +292,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSelectedLocation: handleSetSelectedLocation,
         requestOtp,
         verifyOtpAndLogin,
+        loginWithPhone,
         updateUserProfile,
         addSavedAddress,
         deleteSavedAddress,

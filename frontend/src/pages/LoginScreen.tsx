@@ -5,11 +5,11 @@ import { ShieldCheck, ArrowRight, Sparkles } from 'lucide-react';
 
 export const LoginScreen: React.FC = () => {
   const navigate = useNavigate();
-  const { requestOtp } = useAuth();
+  const { loginWithPhone } = useAuth();
 
   const [phone, setPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,26 +21,38 @@ export const LoginScreen: React.FC = () => {
     }
 
     setError(null);
-    setIsSubmitting(true);
+    setIsAuthenticating(true);
 
     try {
       const fullPhone = `+91${cleanNumber.slice(-10)}`;
-      const res = await requestOtp(fullPhone);
+      const startTime = Date.now();
 
-      navigate('/otp-verify', {
-        state: {
-          phone: fullPhone,
-        },
-      });
+      // Authenticate directly with phone number
+      const authPromise = loginWithPhone(fullPhone);
+
+      // Display the app logo loading state for ~1.8 seconds (under 5 seconds)
+      const [res] = await Promise.all([
+        authPromise,
+        new Promise((resolve) => setTimeout(resolve, 1800)),
+      ]);
+
+      if (res.isNewUser || !res.isProfileCompleted) {
+        navigate('/onboarding', { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Failed to send OTP. Please try again.');
-    } finally {
-      setIsSubmitting(false);
+      setIsAuthenticating(false);
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          'Failed to sign in. Please check your connection and try again.'
+      );
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-between max-w-md mx-auto p-5 shadow-2xl">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-between max-w-md mx-auto p-5 shadow-2xl relative">
       {/* Top Banner */}
       <div className="pt-8">
         <div className="flex items-center space-x-3">
@@ -56,7 +68,7 @@ export const LoginScreen: React.FC = () => {
         <div className="mt-8">
           <h2 className="text-2xl font-extrabold text-slate-900">Enter your mobile number</h2>
           <p className="text-xs text-slate-500 mt-1">
-            We will send a 4-digit verification code to log in or create an account.
+            Sign in instantly to request doorstep scrap pickup at verified rates.
           </p>
         </div>
 
@@ -76,7 +88,8 @@ export const LoginScreen: React.FC = () => {
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="Enter 10-digit mobile number"
                 maxLength={12}
-                className="w-full pl-24 pr-4 py-3.5 bg-white border border-slate-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 rounded-2xl text-base font-bold text-slate-900 outline-none transition shadow-xs"
+                disabled={isAuthenticating}
+                className="w-full pl-24 pr-4 py-3.5 bg-white border border-slate-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 rounded-2xl text-base font-bold text-slate-900 outline-none transition shadow-xs disabled:opacity-50"
                 autoFocus
               />
             </div>
@@ -85,10 +98,10 @@ export const LoginScreen: React.FC = () => {
 
           <button
             type="submit"
-            disabled={isSubmitting || !phone}
+            disabled={isAuthenticating || !phone}
             className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold py-3.5 px-4 rounded-2xl text-sm flex items-center justify-center space-x-2 transition shadow-md mt-4"
           >
-            <span>{isSubmitting ? 'Sending OTP...' : 'Get OTP'}</span>
+            <span>{isAuthenticating ? 'Signing In...' : 'Continue to Scrapwala'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
@@ -104,6 +117,38 @@ export const LoginScreen: React.FC = () => {
           By continuing, you agree to Scrapwala Terms of Service & Privacy Policy.
         </p>
       </div>
+
+      {/* Fullscreen Logo Loading Overlay (< 5 seconds) */}
+      {isAuthenticating && (
+        <div className="fixed inset-0 z-50 bg-slate-900/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-white text-center select-none">
+          <div className="relative mb-6">
+            <div className="w-24 h-24 rounded-3xl bg-white p-2 flex items-center justify-center shadow-2xl ring-8 ring-emerald-500/30 overflow-hidden">
+              <img
+                src="/logo.png"
+                alt="Scrapwala"
+                className="w-full h-full object-contain rounded-2xl animate-pulse"
+              />
+            </div>
+            <div className="absolute -top-1.5 -right-1.5 bg-amber-400 text-slate-900 p-1.5 rounded-full shadow">
+              <Sparkles className="w-3.5 h-3.5 fill-slate-900" />
+            </div>
+          </div>
+
+          <h2 className="text-2xl font-black tracking-tight text-white mb-1">Scrapwala</h2>
+          <p className="text-xs text-emerald-300 font-semibold mb-6">
+            Signing you in securely...
+          </p>
+
+          {/* Animated progress bar */}
+          <div className="w-48 h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+            <div className="h-full bg-gradient-to-r from-emerald-500 via-teal-300 to-emerald-400 rounded-full animate-pulse w-full" />
+          </div>
+
+          <span className="text-[11px] text-slate-400 font-mono mt-3">
+            +91 {phone.replace(/\D/g, '').slice(-10)}
+          </span>
+        </div>
+      )}
     </div>
   );
 };
