@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { OrderService } from '../services/orderService.js';
 import { DealerGatewayService } from '../services/dealerGatewayService.js';
 import { DealerSnapshot } from '../models/DealerSnapshot.js';
+import { Order } from '../models/Order.js';
 import { socketEvents } from '../sockets/socketManager.js';
 
 export const DealerPresenceSchema = z.object({
@@ -10,6 +11,7 @@ export const DealerPresenceSchema = z.object({
   phone: z.string().optional(),
   businessName: z.string().optional(),
   contactPerson: z.string().optional(),
+  profileImage: z.string().optional(),
   isOnline: z.boolean().optional().default(true),
   isAvailable: z.boolean().optional(),
   rating: z.number().optional(),
@@ -57,6 +59,7 @@ export const DealerStatusTransitionSchema = z.object({
       updatedAt: z.any().optional(),
     })
     .optional(),
+  dealerSnapshot: z.any().optional(),
 });
 
 export const DealerLocationUpdateSchema = z.object({
@@ -79,7 +82,7 @@ export class InternalDealerController {
    */
   static async updateStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { orderId, status, note, finalWeights, finalTotalAmount, scrapPhoto, dealerLocation } = req.body;
+      const { orderId, status, note, finalWeights, finalTotalAmount, scrapPhoto, dealerLocation, dealerSnapshot } = req.body;
 
       const order = await OrderService.transitionStatus(orderId, status, {
         updatedBy: 'DEALER',
@@ -88,6 +91,7 @@ export class InternalDealerController {
         finalTotalAmount,
         scrapPhoto,
         dealerLocation,
+        dealerSnapshot,
       });
 
       res.status(200).json({
@@ -178,6 +182,7 @@ export class InternalDealerController {
         phone,
         businessName,
         contactPerson,
+        profileImage,
         isOnline,
         isAvailable,
         rating,
@@ -200,6 +205,7 @@ export class InternalDealerController {
       if (phone) updateData.phone = phone;
       if (businessName) updateData.businessName = businessName;
       if (contactPerson) updateData.contactPerson = contactPerson;
+      if (profileImage !== undefined) updateData.profileImage = profileImage;
       if (rating !== undefined) updateData.rating = rating;
       if (totalRatings !== undefined) updateData.totalRatings = totalRatings;
       if (vehicleType) updateData.vehicleType = vehicleType;
@@ -226,6 +232,7 @@ export class InternalDealerController {
             phone: phone || '+91 98765 43210',
             businessName: businessName || 'Partner Scrap Dealer',
             contactPerson: contactPerson || 'Partner Dealer',
+            profileImage: profileImage || '',
             rating: rating || 4.9,
             totalRatings: totalRatings || 142,
             location: {
@@ -241,6 +248,14 @@ export class InternalDealerController {
         },
         { upsert: true, new: true }
       );
+
+      // Backfill active order snapshot if dealer updated their profile image or info
+      if (profileImage) {
+        await Order.updateMany(
+          { dealerId, status: { $in: ['PENDING', 'ACCEPTED', 'DEALER_EN_ROUTE', 'ARRIVED', 'OTP_PENDING'] } },
+          { $set: { 'dealerSnapshot.profileImage': profileImage } }
+        );
+      }
 
       // Real-time broadcast to all consumer WebSocket listeners
       socketEvents.emitDealerStatusUpdate(dealerId, onlineStatus, {
@@ -265,6 +280,48 @@ export class InternalDealerController {
         success: false,
         message: error.message || 'Failed to update dealer presence',
       });
+    }
+  }
+
+  /**
+   * Handle incoming chat message from dealer app forward
+   */
+  static async handleDealerChatMessage(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    try {
+      const { orderId, dealerId, message } = req.body;
+      const order = await Order.findOne({ orderId });
+      if (!order) {
+        res.status(404).json({ success: false, message: 'Order not found' });
+        return;
+      }
+
+      const msgObj = {
+        id: message.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+        sender: 'dealer' as const,
+        senderName: message.senderName || order.dealerSnapshot?.contactPerson || 'Dealer Partner',
+        text: message.text,
+        timestamp: message.timestamp ? new Date(message.timestamp) : new Date(),
+      };
+
+      if (!order.chatMessages) {
+        order.chatMessages = [];
+      }
+
+      if (!order.chatMessages.some((m) => m.id === msgObj.id)) {
+        order.chatMessages.push(msgObj);
+        await order.save();
+      }
+
+      // Broadcast to consumer socket room
+      socketEvents.emitChatMessage(order.orderId, order.consumerId.toString(), {
+        ...msgObj,
+        orderId: order.orderId,
+        formattedTime: msgObj.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+
+      res.status(200).json({ success: true, message: 'Chat message received and broadcasted', data: msgObj });
+    } catch (error: any) {
+      res.status(400).json({ success: false, message: error.message });
     }
   }
 }

@@ -279,4 +279,71 @@ export class DealerGatewayService {
       { new: true }
     );
   }
+
+  /**
+   * Forward order cancellation event to Kabadidealer partner backend
+   */
+  static async notifyOrderCancelled(
+    orderId: string,
+    dealerId: string,
+    options: { reason?: string; cancelledBy?: string } = {}
+  ): Promise<boolean> {
+    try {
+      await axios.post(
+        `${config.kabadidealerApiUrl}/internal/consumer/cancel`,
+        {
+          orderId,
+          dealerId,
+          reason: options.reason || 'Cancelled by consumer',
+          cancelledBy: options.cancelledBy || 'CONSUMER',
+        },
+        {
+          headers: this.getHeaders(),
+          timeout: 5000,
+        }
+      );
+      return true;
+    } catch (err: any) {
+      console.warn(
+        `⚠️ [DealerGatewayService] Failed to notify Kabadidealer backend of cancellation: ${err.message}`
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Forward consumer chat message to Kabadidealer partner backend
+   */
+  static async forwardConsumerChatMessage(
+    orderId: string,
+    dealerId: string,
+    message: {
+      id: string;
+      sender: 'consumer';
+      senderName: string;
+      text: string;
+      timestamp: string;
+    }
+  ): Promise<boolean> {
+    try {
+      await axios.post(
+        `${config.kabadidealerApiUrl}/internal/consumer/chat`,
+        {
+          orderId,
+          dealerId,
+          message,
+        },
+        {
+          headers: this.getHeaders(),
+          timeout: 5000,
+        }
+      );
+      return true;
+    } catch (err: any) {
+      console.warn(
+        `⚠️ [DealerGatewayService] Failed to forward consumer chat message: ${err.message}`
+      );
+      return false;
+    }
+  }
 }

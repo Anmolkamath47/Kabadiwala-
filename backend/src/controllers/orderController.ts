@@ -114,4 +114,34 @@ export class OrderController {
       });
     }
   }
+
+  static async getOrderChat(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+    try {
+      const orderId = req.params.orderId as string;
+      const messages = await OrderService.getOrderChatMessages(orderId);
+      res.status(200).json({ success: true, data: messages });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  static async postOrderChat(req: AuthenticatedRequest, res: Response, _next: NextFunction): Promise<void> {
+    try {
+      const orderId = req.params.orderId as string;
+      const { text, senderName } = req.body;
+      if (!text || !text.trim()) {
+        res.status(400).json({ success: false, message: 'Message text is required' });
+        return;
+      }
+      const message = await OrderService.addOrderChatMessage(
+        orderId,
+        'consumer',
+        senderName || (req as any).user?.name || 'Customer',
+        text
+      );
+      res.status(201).json({ success: true, data: message });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
 }

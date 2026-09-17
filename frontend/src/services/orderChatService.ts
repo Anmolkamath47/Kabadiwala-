@@ -1,4 +1,5 @@
 import { socketService } from './socketService';
+import api from './api';
 
 export interface OrderChatMessage {
   id: string;
@@ -16,6 +17,7 @@ class OrderChatService {
   private channel: BroadcastChannel | null = null;
   private listeners: Map<string, Set<MessageListener>> = new Map();
   private socketCleanups: Map<string, () => void> = new Map();
+  private pollingTimers: Map<string, any> = new Map();
 
   constructor() {
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -84,6 +86,52 @@ class OrderChatService {
     }
   }
 
+  public async syncFromServer(orderId: string): Promise<void> {
+    if (!orderId) return;
+    try {
+      const res = await api.get(`/orders/${orderId}/chat`);
+      if (res.data && Array.isArray(res.data.data)) {
+        const serverMsgs: any[] = res.data.data;
+        if (serverMsgs.length > 0) {
+          const current = this.getMessages(orderId);
+          let changed = false;
+
+          for (const sm of serverMsgs) {
+            const formatted: OrderChatMessage = {
+              id: sm.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+              orderId,
+              sender: sm.sender,
+              senderName: sm.senderName || '',
+              text: sm.text,
+              timestamp: sm.timestamp || new Date().toISOString(),
+              formattedTime:
+                sm.formattedTime ||
+                new Date(sm.timestamp || Date.now()).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
+            };
+
+            const existingIdx = current.findIndex(
+              (m) => m.id === formatted.id || (m.text === formatted.text && m.sender === formatted.sender)
+            );
+            if (existingIdx === -1) {
+              current.push(formatted);
+              changed = true;
+            }
+          }
+
+          if (changed) {
+            this.saveMessages(orderId, current);
+            this.notifyListeners(orderId);
+          }
+        }
+      }
+    } catch (err) {
+      // Server sync fallback silent
+    }
+  }
+
   public sendMessage(
     orderId: string,
     sender: 'consumer' | 'dealer',
@@ -106,10 +154,11 @@ class OrderChatService {
       formattedTime: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    // 1. Save to local storage
+    // 1. Optimistically save to local storage & notify current listeners
     const current = this.getMessages(orderId);
     current.push(message);
     this.saveMessages(orderId, current);
+    this.notifyListeners(orderId);
 
     // 2. Broadcast across tabs via BroadcastChannel
     if (this.channel) {
@@ -120,26 +169,27 @@ class OrderChatService {
       }
     }
 
-    // 3. Emit via Socket.IO if connected
+    // 3. Emit via Socket.IO
     try {
       const socket = socketService.connect();
-      if (socket && socket.connected) {
+      if (socket) {
         socket.emit('order:chat:send', message);
       }
     } catch (err) {
       console.warn('Socket chat emission fallback warning:', err);
     }
 
-    // 4. Notify local listeners in current window
-    this.notifyListeners(orderId);
+    // 4. Persist to MongoDB backend and trigger cross-app sync
+    api.post(`/orders/${orderId}/chat`, { text: cleanText, senderName }).catch((err) => {
+      console.warn('Backend chat persistence warning:', err.message);
+    });
 
     return message;
   }
 
   private handleIncomingMessage(msg: OrderChatMessage): void {
     const current = this.getMessages(msg.orderId);
-    // Prevent duplicate messages
-    if (!current.some((m) => m.id === msg.id)) {
+    if (!current.some((m) => m.id === msg.id || (m.text === msg.text && m.sender === msg.sender))) {
       current.push(msg);
       this.saveMessages(msg.orderId, current);
     }
@@ -166,10 +216,13 @@ class OrderChatService {
     }
     this.listeners.get(orderId)!.add(listener);
 
-    // Provide initial messages immediately
+    // 1. Provide cached messages immediately
     listener(this.getMessages(orderId));
 
-    // Connect socket listener for this order if available
+    // 2. Fetch server history right away
+    this.syncFromServer(orderId);
+
+    // 3. Connect socket listener
     if (!this.socketCleanups.has(orderId)) {
       try {
         const cleanup = socketService.on('order:chat:message', (data: any) => {
@@ -181,10 +234,12 @@ class OrderChatService {
               senderName: data.senderName || 'Partner',
               text: data.text || '',
               timestamp: data.timestamp || new Date().toISOString(),
-              formattedTime: new Date(data.timestamp || Date.now()).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              }),
+              formattedTime:
+                data.formattedTime ||
+                new Date(data.timestamp || Date.now()).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
             });
           }
         });
@@ -194,16 +249,31 @@ class OrderChatService {
       }
     }
 
+    // 4. Polling timer every 2500ms to guarantee real-time delivery across different devices/browsers
+    if (!this.pollingTimers.has(orderId)) {
+      const timer = setInterval(() => {
+        this.syncFromServer(orderId);
+      }, 2500);
+      this.pollingTimers.set(orderId, timer);
+    }
+
     return () => {
       const set = this.listeners.get(orderId);
       if (set) {
         set.delete(listener);
         if (set.size === 0) {
           this.listeners.delete(orderId);
+
           const cleanup = this.socketCleanups.get(orderId);
           if (cleanup) {
             cleanup();
             this.socketCleanups.delete(orderId);
+          }
+
+          const timer = this.pollingTimers.get(orderId);
+          if (timer) {
+            clearInterval(timer);
+            this.pollingTimers.delete(orderId);
           }
         }
       }

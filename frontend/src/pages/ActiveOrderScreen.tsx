@@ -70,6 +70,21 @@ export const ActiveOrderScreen: React.FC = () => {
     (order?.dealerSnapshot as any)?.profilePhoto ||
     (order?.dealerSnapshot as any)?.avatar;
 
+  // Real dealer rating
+  const dealerRatingScore = (order?.dealerSnapshot as any)?.rating || 4.9;
+  const dealerRatingReviews =
+    (order?.dealerSnapshot as any)?.completedPickups ||
+    (order?.dealerSnapshot as any)?.totalRatings ||
+    0;
+  const dealerRatingText =
+    dealerRatingReviews > 0
+      ? `${Number(dealerRatingScore).toFixed(1)} ★ (${dealerRatingReviews} scrap pickups)`
+      : `${Number(dealerRatingScore).toFixed(1)} ★ Verified Partner`;
+
+  useEffect(() => {
+    setDealerImgError(false);
+  }, [dealerPhoto]);
+
   // Real-time Chat Subscription
   useEffect(() => {
     if (!order?.orderId) return;
@@ -216,10 +231,10 @@ export const ActiveOrderScreen: React.FC = () => {
             </button>
           </div>
 
-          {/* Headline: Order is on the way 🤘 */}
+          {/* Headline: <Dealer Name> is on the way 🤘 */}
           <div className="text-center mt-2.5">
             <h1 className="text-2xl sm:text-[26px] font-black tracking-tight text-white flex items-center justify-center space-x-2">
-              <span>Order is on the way</span>
+              <span>{dealerDisplayName} is on the way</span>
               <span className="text-2xl">🤘</span>
             </h1>
 
@@ -376,7 +391,7 @@ export const ActiveOrderScreen: React.FC = () => {
                       {dealerDisplayName}
                     </h3>
                     <p className="text-xs text-slate-500 truncate mt-0.5">
-                      100+ five-star scrap pickups · {activeVehicleDetails.badge}
+                      {dealerRatingText} · {activeVehicleDetails.badge}
                     </p>
                   </div>
                 </div>

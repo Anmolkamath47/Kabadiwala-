@@ -15,5 +15,7 @@ router.post('/', validateRequest(CreateOrderSchema), OrderController.createOrder
 router.get('/', OrderController.getConsumerOrders);
 router.get('/:orderId', OrderController.getOrderDetails);
 router.post('/:orderId/cancel', validateRequest(CancelOrderSchema), OrderController.cancelOrder);
+router.get('/:orderId/chat', OrderController.getOrderChat);
+router.post('/:orderId/chat', OrderController.postOrderChat);
 
 export default router;

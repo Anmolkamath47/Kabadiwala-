@@ -129,6 +129,10 @@ export class OrderService {
         phone: dealer.phone || '+91 98765 43210',
         vehicleType: dealer.vehicleType || 'Electric Mini Loader',
         vehicleNumber: dealer.vehicleNumber || 'DL-01-EV-9821',
+        profileImage: dealer.profileImage || '',
+        rating: dealer.rating || 4.9,
+        totalRatings: dealer.totalRatings || 24,
+        completedPickups: dealer.completedPickups || dealer.totalRatings || 24,
       },
       pickupAddress: data.pickupAddress,
       pickupLocation: {
@@ -183,6 +187,7 @@ export class OrderService {
       finalTotalAmount?: number;
       scrapPhoto?: string;
       dealerLocation?: any;
+      dealerSnapshot?: any;
     } = {}
   ): Promise<IOrder> {
     const order = await Order.findOne({ orderId });
@@ -208,6 +213,14 @@ export class OrderService {
       updatedBy: options.updatedBy || 'SYSTEM',
     });
 
+    if (options.dealerSnapshot) {
+      order.dealerSnapshot = {
+        ...order.dealerSnapshot,
+        ...options.dealerSnapshot,
+      };
+      order.markModified('dealerSnapshot');
+    }
+
     if (options.dealerLocation && options.dealerLocation.coordinates) {
       order.dealerLiveLocation = {
         coordinates: options.dealerLocation.coordinates,
@@ -222,6 +235,14 @@ export class OrderService {
     if (newStatus === 'CANCELLED') {
       order.cancellationReason = options.cancellationReason || 'Cancelled by user';
       order.cancelledBy = options.updatedBy || 'CONSUMER';
+
+      // Forward cancellation to Kabadidealer partner backend
+      if (order.dealerId) {
+        DealerGatewayService.notifyOrderCancelled(order.orderId, order.dealerId, {
+          reason: order.cancellationReason,
+          cancelledBy: order.cancelledBy,
+        }).catch((err) => console.warn('Cross-app cancel notification warning:', err.message));
+      }
     }
 
     if (newStatus === 'COMPLETED') {
@@ -364,7 +385,89 @@ export class OrderService {
     if (consumerId) {
       query.consumerId = new mongoose.Types.ObjectId(consumerId);
     }
-    return Order.findOne(query);
+    const order = await Order.findOne(query);
+    if (!order) return null;
+
+    // Auto-backfill dealer DP, real rating, and total reviews if missing from snapshot
+    if (order.dealerId && (!order.dealerSnapshot?.profileImage || !order.dealerSnapshot?.rating)) {
+      try {
+        const dealer = await DealerGatewayService.getDealerById(order.dealerId);
+        if (dealer && (dealer.profileImage || dealer.rating)) {
+          order.dealerSnapshot.profileImage = dealer.profileImage || order.dealerSnapshot.profileImage || '';
+          order.dealerSnapshot.rating = dealer.rating || order.dealerSnapshot.rating || 4.9;
+          order.dealerSnapshot.totalRatings = dealer.totalRatings || order.dealerSnapshot.totalRatings || 24;
+          order.dealerSnapshot.completedPickups = dealer.completedPickups || dealer.totalRatings || 24;
+          order.markModified('dealerSnapshot');
+          await order.save().catch(() => {});
+        }
+      } catch (err) {
+        // silent fallback
+      }
+    }
+
+    return order;
+  }
+
+  /**
+   * Fetch chat history for an order
+   */
+  static async getOrderChatMessages(orderId: string): Promise<any[]> {
+    const order = await Order.findOne({ orderId }).select('chatMessages dealerSnapshot').lean();
+    if (!order) return [];
+    return (order.chatMessages || []).map((m: any) => ({
+      ...m,
+      orderId,
+      formattedTime: new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }));
+  }
+
+  /**
+   * Post new chat message from consumer or dealer
+   */
+  static async addOrderChatMessage(
+    orderId: string,
+    sender: 'consumer' | 'dealer',
+    senderName: string,
+    text: string
+  ): Promise<any> {
+    const order = await Order.findOne({ orderId });
+    if (!order) throw new Error(`Order ${orderId} not found`);
+
+    const msgObj = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      sender,
+      senderName,
+      text: text.trim(),
+      timestamp: new Date(),
+    };
+
+    if (!order.chatMessages) {
+      order.chatMessages = [];
+    }
+    order.chatMessages.push(msgObj);
+    await order.save();
+
+    const formatted = {
+      ...msgObj,
+      orderId,
+      formattedTime: msgObj.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    // 1. Emit to consumer socket room
+    socketEvents.emitChatMessage(order.orderId, order.consumerId.toString(), formatted);
+
+    // 2. If sent by consumer, forward to Kabadidealer partner backend
+    if (sender === 'consumer' && order.dealerId) {
+      DealerGatewayService.forwardConsumerChatMessage(order.orderId, order.dealerId, {
+        id: msgObj.id,
+        sender: 'consumer',
+        senderName,
+        text: msgObj.text,
+        timestamp: msgObj.timestamp.toISOString(),
+      }).catch((err) => console.warn('Cross-app chat forward warning:', err.message));
+    }
+
+    return formatted;
   }
 
   /**

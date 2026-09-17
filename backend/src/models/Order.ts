@@ -8,6 +8,14 @@ import {
   DealerLiveLocationUpdate,
 } from '../types/index.js';
 
+export interface IOrderChatMessage {
+  id: string;
+  sender: 'consumer' | 'dealer';
+  senderName: string;
+  text: string;
+  timestamp: Date;
+}
+
 export interface IOrder extends Document {
   orderId: string;
   consumerId: mongoose.Types.ObjectId;
@@ -18,6 +26,10 @@ export interface IOrder extends Document {
     phone: string;
     vehicleType?: string;
     vehicleNumber?: string;
+    profileImage?: string;
+    rating?: number;
+    totalRatings?: number;
+    completedPickups?: number;
   };
   pickupAddress: string;
   pickupLocation: {
@@ -42,6 +54,7 @@ export interface IOrder extends Document {
   cancellationReason?: string;
   cancelledBy?: 'CONSUMER' | 'DEALER' | 'SYSTEM';
   rated: boolean;
+  chatMessages: IOrderChatMessage[];
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -120,6 +133,10 @@ const OrderSchema = new Schema<IOrder>(
       phone: { type: String, required: true },
       vehicleType: { type: String, default: 'Electric Scrap Auto' },
       vehicleNumber: { type: String, default: 'DL-01-AB-1234' },
+      profileImage: { type: String, default: '' },
+      rating: { type: Number, default: 4.8 },
+      totalRatings: { type: Number, default: 24 },
+      completedPickups: { type: Number, default: 24 },
     },
     pickupAddress: {
       type: String,
@@ -184,6 +201,15 @@ const OrderSchema = new Schema<IOrder>(
     cancellationReason: { type: String },
     cancelledBy: { type: String, enum: ['CONSUMER', 'DEALER', 'SYSTEM'] },
     rated: { type: Boolean, default: false },
+    chatMessages: [
+      {
+        id: { type: String, required: true },
+        sender: { type: String, enum: ['consumer', 'dealer'], required: true },
+        senderName: { type: String, default: '' },
+        text: { type: String, required: true },
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
     notes: { type: String },
   },
   {

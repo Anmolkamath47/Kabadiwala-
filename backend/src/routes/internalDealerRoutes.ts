@@ -40,4 +40,9 @@ router.post(
   InternalDealerController.verifyOtp
 );
 
+router.post(
+  '/chat',
+  InternalDealerController.handleDealerChatMessage
+);
+
 export default router;

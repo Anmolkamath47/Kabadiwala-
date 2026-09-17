@@ -173,4 +173,12 @@ export const socketEvents = {
       ioInstance.emit('dealer:online', payload);
     }
   },
+
+  /**
+   * Broadcast in-app chat message to consumer order room
+   */
+  emitChatMessage: (orderId: string, consumerId: string, message: any) => {
+    if (!ioInstance) return;
+    ioInstance.to(`order:${orderId}`).to(`user:${consumerId}`).emit('order:chat:message', message);
+  },
 };

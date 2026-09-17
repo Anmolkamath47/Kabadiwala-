@@ -6,8 +6,10 @@ export interface IDealerSnapshot extends Document {
   businessName: string;
   contactPerson: string;
   phone: string;
+  profileImage?: string;
   rating: number;
   totalRatings: number;
+  completedPickups?: number;
   isAvailable: boolean;
   activeRadiusKm: number;
   location: {
@@ -50,8 +52,10 @@ const DealerSnapshotSchema = new Schema<IDealerSnapshot>(
     businessName: { type: String, required: true },
     contactPerson: { type: String, required: true },
     phone: { type: String, required: true },
+    profileImage: { type: String, default: '' },
     rating: { type: Number, default: 4.8, min: 1, max: 5 },
     totalRatings: { type: Number, default: 24 },
+    completedPickups: { type: Number, default: 24 },
     isAvailable: { type: Boolean, default: true, index: true },
     activeRadiusKm: { type: Number, default: 10 },
     location: {
