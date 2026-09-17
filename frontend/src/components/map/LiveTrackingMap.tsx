@@ -25,7 +25,6 @@ interface LiveTrackingMapProps {
   dealerName?: string;
   dealerVehicle?: string;
   onEtaUpdate?: (etaMinutes: number, distanceKm: number) => void;
-  onCouponClick?: () => void;
   className?: string;
 }
 
@@ -36,7 +35,6 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
   dealerName = 'Scrap Collector',
   dealerVehicle = 'Electric Scrap Loader',
   onEtaUpdate,
-  onCouponClick,
   className = 'h-[360px] sm:h-96 min-h-[340px]',
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -286,18 +284,6 @@ export const LiveTrackingMap: React.FC<LiveTrackingMapProps> = ({
             <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
           </button>
         </div>
-
-        {/* Floating Blue Zomato-Style Collected Coupons Button */}
-        <button
-          type="button"
-          onClick={onCouponClick}
-          className="bg-[#2563eb] hover:bg-blue-600 text-white text-xs font-black px-3.5 py-2 rounded-full shadow-2xl border border-blue-400/40 flex items-center space-x-1.5 transition active:scale-95 cursor-pointer"
-        >
-          <div className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-black">
-            %
-          </div>
-          <span>Collected coupons</span>
-        </button>
       </div>
 
       {/* Live Route Distance Indicator Pill */}

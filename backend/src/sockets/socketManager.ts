@@ -65,6 +65,14 @@ export const initSocketServer = (httpServer: HttpServer): Server => {
       }
     });
 
+    // Real-time chat message broadcast
+    socket.on('order:chat:send', (data: any) => {
+      if (data && data.orderId && data.text) {
+        io.to(`order:${data.orderId}`).emit('order:chat:message', data);
+        console.log(`💬 Relayed chat message in order:${data.orderId} from ${data.sender}`);
+      }
+    });
+
     socket.on('disconnect', (reason) => {
       console.log(`🔌 Socket disconnected: ${socket.id} (${reason})`);
     });

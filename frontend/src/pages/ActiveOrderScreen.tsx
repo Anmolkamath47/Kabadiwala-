@@ -27,6 +27,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { getVehicleDetails } from '../utils/vehicleUtils';
+import { orderChatService, OrderChatMessage } from '../services/orderChatService';
 
 export const ActiveOrderScreen: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -51,21 +52,34 @@ export const ActiveOrderScreen: React.FC = () => {
   const [etaMins, setEtaMins] = useState<number>(7);
   const [isRefreshingTracking, setIsRefreshingTracking] = useState<boolean>(false);
   const [showMessageBanner, setShowMessageBanner] = useState<boolean>(true);
-  const [selectedVehicleType, setSelectedVehicleType] = useState<string>(
-    order?.dealerSnapshot?.vehicleType || 'Tata Ace Mini Truck'
-  );
-  const [selectedTip, setSelectedTip] = useState<number | null>(null);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'dealer' | 'consumer'; text: string; time: string }>>([
-    {
-      sender: 'dealer',
-      text: 'Hello! I am on the way with a certified digital scale. Please keep your scrap ready at the doorstep.',
-      time: 'Just now',
-    },
-  ]);
+  const [chatMessages, setChatMessages] = useState<OrderChatMessage[]>([]);
   const [chatInput, setChatInput] = useState<string>('');
+  const [dealerImgError, setDealerImgError] = useState<boolean>(false);
 
-  const activeVehicleDetails = getVehicleDetails(selectedVehicleType || order?.dealerSnapshot?.vehicleType);
+  // Strictly consider the vehicle which dealer has registered only
+  const registeredVehicle = order?.dealerSnapshot?.vehicleType || 'Delivery Scooter';
+  const activeVehicleDetails = getVehicleDetails(registeredVehicle);
+
+  // Dynamic DP: Use dealer's uploaded photo; if not uploaded, use first letter
+  const dealerDisplayName =
+    order?.dealerSnapshot?.contactPerson || order?.dealerSnapshot?.businessName || 'Scrap Dealer';
+  const dealerFirstLetter = (dealerDisplayName.trim().charAt(0) || 'D').toUpperCase();
+  const dealerPhoto =
+    (order?.dealerSnapshot as any)?.profileImage ||
+    (order?.dealerSnapshot as any)?.profilePhoto ||
+    (order?.dealerSnapshot as any)?.avatar;
+
+  // Real-time Chat Subscription
+  useEffect(() => {
+    if (!order?.orderId) return;
+    const unsubscribe = orderChatService.subscribe(order.orderId, (msgs) => {
+      setChatMessages(msgs);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [order?.orderId]);
 
   useEffect(() => {
     if (orderId) {
@@ -142,26 +156,13 @@ export const ActiveOrderScreen: React.FC = () => {
 
   const handleSendMessage = (textToSend?: string) => {
     const txt = (textToSend || chatInput).trim();
-    if (!txt) return;
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        sender: 'consumer',
-        text: txt,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ]);
-    setChatInput('');
-    setTimeout(() => {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          sender: 'dealer',
-          text: `Got it! Reaching your doorstep in approx ${etaMins} mins.`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-    }, 1200);
+    if (!txt || !order?.orderId) return;
+    try {
+      orderChatService.sendMessage(order.orderId, 'consumer', 'Customer', txt);
+      setChatInput('');
+    } catch (err) {
+      console.warn('Failed to send chat message:', err);
+    }
   };
 
   const toggleTag = (tag: string) => {
@@ -292,33 +293,6 @@ export const ActiveOrderScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Vehicle Model Selector Bar for instant testing of all 3 vehicles */}
-      {isLiveTracking && (
-        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200/80 flex items-center justify-between text-xs overflow-x-auto select-none">
-          <span className="text-slate-500 font-bold flex-shrink-0 mr-2 text-[11px]">Dealer Vehicle on Road:</span>
-          <div className="flex items-center space-x-1.5 flex-shrink-0">
-            {[
-              { id: 'bike', label: '🛵 Bike', value: 'Delivery Scooter / Bike' },
-              { id: 'truck', label: '🛻 Pickup Truck', value: 'Tata Ace Mini Truck' },
-              { id: 'auto', label: '🛺 3-Wheeler', value: '3-Wheeler Auto Loader' },
-            ].map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                onClick={() => setSelectedVehicleType(v.value)}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition whitespace-nowrap cursor-pointer ${
-                  activeVehicleDetails.category === v.id
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-                }`}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Dynamic Content by State */}
       <div className="p-4 space-y-4 overflow-y-auto flex-1">
         {/* ================= STATE 1: PENDING (Searching/Waiting) ================= */}
@@ -364,55 +338,42 @@ export const ActiveOrderScreen: React.FC = () => {
         {/* ================= STATE 2 & 3: ACCEPTED & DEALER_EN_ROUTE (Live Tracking) ================= */}
         {['ACCEPTED', 'DEALER_EN_ROUTE', 'ARRIVED', 'OTP_PENDING'].includes(order.status) && (
           <div className="space-y-4">
-            {/* Live Interactive Map */}
+            {/* Live Interactive Map using strictly the dealer's registered vehicle */}
             <LiveTrackingMap
               pickupCoords={order.pickupLocation?.coordinates || [77.5020, 13.0450]}
               dealerLocation={dealerLiveLocation || order.dealerLiveLocation}
               pickupAddress={order.pickupAddress}
-              dealerName={order.dealerSnapshot?.businessName || 'Scrap Collector Partner'}
-              dealerVehicle={selectedVehicleType || order.dealerSnapshot?.vehicleType || 'Tata Ace Mini Truck'}
+              dealerName={dealerDisplayName}
+              dealerVehicle={registeredVehicle}
               onEtaUpdate={(mins) => setEtaMins(mins)}
-              onCouponClick={() => alert('Special ₹50 scrap bonus voucher applied to your payout!')}
               className="h-[360px] sm:h-[400px]"
             />
 
-            {/* Promo Card matching Zomato Screenshot */}
-            <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-card flex items-center justify-between">
-              <div className="flex items-center space-x-3 min-w-0">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500 via-pink-500 to-rose-400 flex items-center justify-center text-white flex-shrink-0 shadow-md">
-                  <Sparkles className="w-6 h-6" />
-                </div>
-                <div className="min-w-0">
-                  <h4 className="text-xs font-black text-slate-900 truncate">Make your next scrap pickup special 😍</h4>
-                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                    Iconic rates from faraway places delivered to your doorstep!
-                  </p>
-                  <div className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center mt-0.5 cursor-pointer">
-                    <span>Order from Scrapwala Specials</span>
-                    <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Dealer / Driver Profile Card matching Zomato Screenshot */}
+            {/* Dealer / Driver Profile Card with dynamic uploaded DP or first letter fallback */}
             <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-card">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3 min-w-0">
                   <div className="relative flex-shrink-0">
-                    <div className="w-12 h-12 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-md">
-                      <img
-                        src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
-                        alt="Partner"
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-md flex items-center justify-center bg-slate-100">
+                      {dealerPhoto && !dealerImgError ? (
+                        <img
+                          src={dealerPhoto}
+                          alt={dealerDisplayName}
+                          onError={() => setDealerImgError(true)}
+                          className="w-full h-full object-cover rounded-full"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-tr from-emerald-600 to-teal-700 text-white font-black text-lg flex items-center justify-center uppercase select-none rounded-full shadow-inner">
+                          {dealerFirstLetter}
+                        </div>
+                      )}
                     </div>
-                    <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white shadow-xs"></span>
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white shadow-xs"></span>
                   </div>
 
                   <div className="min-w-0">
                     <h3 className="text-sm font-extrabold text-slate-900 truncate">
-                      {order.dealerSnapshot?.contactPerson || 'Chandan Kumar Rajbhar'}
+                      {dealerDisplayName}
                     </h3>
                     <p className="text-xs text-slate-500 truncate mt-0.5">
                       100+ five-star scrap pickups · {activeVehicleDetails.badge}
@@ -440,37 +401,6 @@ export const ActiveOrderScreen: React.FC = () => {
                   </a>
                 </div>
               </div>
-            </div>
-
-            {/* Thank Driver / Tipping Card matching Zomato Screenshot */}
-            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-card space-y-2.5">
-              <div>
-                <h4 className="text-xs font-black text-slate-900">
-                  Thank {(order.dealerSnapshot?.contactPerson || 'Chandan').split(' ')[0]} by leaving a tip
-                </h4>
-                <p className="text-[11px] text-slate-500">100% of the tip will go to your scrap pickup partner</p>
-              </div>
-              <div className="grid grid-cols-4 gap-2">
-                {[20, 30, 50, 100].map((amt) => (
-                  <button
-                    key={amt}
-                    type="button"
-                    onClick={() => setSelectedTip(selectedTip === amt ? null : amt)}
-                    className={`py-2 px-1 rounded-2xl text-xs font-black transition border cursor-pointer ${
-                      selectedTip === amt
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-800 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    ₹{amt}
-                  </button>
-                ))}
-              </div>
-              {selectedTip && (
-                <p className="text-[11px] text-emerald-700 font-bold text-center">
-                  ₹{selectedTip} tip will be credited to partner upon doorstep completion!
-                </p>
-              )}
             </div>
 
             {/* Doorstep Verification OTP Card (100% Intact) */}
@@ -715,18 +645,25 @@ export const ActiveOrderScreen: React.FC = () => {
             <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
               <div className="flex items-center space-x-2.5 min-w-0">
                 <div className="relative flex-shrink-0">
-                  <div className="w-9 h-9 rounded-full bg-slate-700 overflow-hidden border border-slate-600">
-                    <img
-                      src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
-                      alt="Dealer"
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="w-9 h-9 rounded-full bg-slate-700 overflow-hidden border border-slate-600 flex items-center justify-center">
+                    {dealerPhoto && !dealerImgError ? (
+                      <img
+                        src={dealerPhoto}
+                        alt={dealerDisplayName}
+                        onError={() => setDealerImgError(true)}
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-tr from-emerald-600 to-teal-700 text-white font-black text-sm flex items-center justify-center uppercase select-none rounded-full">
+                        {dealerFirstLetter}
+                      </div>
+                    )}
                   </div>
                   <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-slate-900"></span>
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm font-bold text-white truncate">
-                    {order.dealerSnapshot?.contactPerson || 'Chandan Kumar'}
+                    {dealerDisplayName}
                   </h3>
                   <p className="text-[10px] text-emerald-400 font-semibold truncate">Scrap Dealer Partner · Active</p>
                 </div>
@@ -770,7 +707,7 @@ export const ActiveOrderScreen: React.FC = () => {
                   >
                     {msg.text}
                   </div>
-                  <span className="text-[9px] text-slate-400 mt-1 px-1">{msg.time}</span>
+                  <span className="text-[9px] text-slate-400 mt-1 px-1">{msg.formattedTime || msg.timestamp}</span>
                 </div>
               ))}
             </div>
