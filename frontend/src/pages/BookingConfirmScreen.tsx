@@ -14,11 +14,9 @@ import {
   AlertCircle,
   ArrowRight,
   Camera,
-  Image as ImageIcon,
   Trash2,
   ZoomIn,
   CheckCircle2,
-  Sparkles,
   X,
 } from 'lucide-react';
 
@@ -145,23 +143,6 @@ export const BookingConfirmScreen: React.FC = () => {
     setPhotoError(null);
   };
 
-  const handleUseSamplePhoto = async () => {
-    setIsProcessingPhoto(true);
-    setPhotoError(null);
-    try {
-      const response = await fetch('/sample_scrap_photo.jpg');
-      const blob = await response.blob();
-      const file = new File([blob], 'sample_scrap.jpg', { type: 'image/jpeg' });
-      const dataUrl = await compressImage(file);
-      setScrapPhoto(dataUrl);
-      setError(null);
-    } catch {
-      setScrapPhoto('/sample_scrap_photo.jpg');
-      setError(null);
-    } finally {
-      setIsProcessingPhoto(false);
-    }
-  };
 
   const handleCreateOrder = async () => {
     if (selectedMaterials.length === 0) {
@@ -322,7 +303,7 @@ export const BookingConfirmScreen: React.FC = () => {
           </div>
 
           <p className="text-[11px] text-slate-500 leading-snug">
-            Please capture or upload a photo of your scrap pile. The dealer gets this same photo in their incoming notification to inspect and accept.
+            Please capture a photo of your scrap pile using your camera. The dealer gets this same photo in their incoming notification to inspect and accept.
           </p>
 
           {scrapPhoto ? (
@@ -348,10 +329,11 @@ export const BookingConfirmScreen: React.FC = () => {
               <div className="flex items-center justify-between gap-2 pt-1">
                 <label className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center space-x-1.5 cursor-pointer transition">
                   <Camera className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Retake / Change</span>
+                  <span>Retake Photo</span>
                   <input
                     type="file"
                     accept="image/*"
+                    capture="environment"
                     onChange={handleFileChange}
                     className="hidden"
                   />
@@ -368,47 +350,23 @@ export const BookingConfirmScreen: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="space-y-2.5">
-              <div className="grid grid-cols-2 gap-2.5">
-                <label className="p-3.5 rounded-xl border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/50 hover:bg-emerald-50 flex flex-col items-center justify-center space-y-1.5 text-center cursor-pointer transition group">
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 group-hover:bg-emerald-200 text-emerald-700 flex items-center justify-center transition">
-                    <Camera className="w-4 h-4" />
-                  </div>
-                  <span className="text-xs font-extrabold text-emerald-900">Take Photo</span>
-                  <span className="text-[10px] text-emerald-700 font-medium">Use Camera</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                </label>
-
-                <label className="p-3.5 rounded-xl border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50 hover:bg-slate-100 flex flex-col items-center justify-center space-y-1.5 text-center cursor-pointer transition group">
-                  <div className="w-8 h-8 rounded-full bg-slate-200 group-hover:bg-emerald-100 text-slate-700 group-hover:text-emerald-700 flex items-center justify-center transition">
-                    <ImageIcon className="w-4 h-4" />
-                  </div>
-                  <span className="text-xs font-extrabold text-slate-900">Upload Gallery</span>
-                  <span className="text-[10px] text-slate-500 font-medium">Choose File</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-
-              {/* Quick sample scrap photo option for easy demonstration */}
-              <button
-                type="button"
-                onClick={handleUseSamplePhoto}
-                className="w-full py-2 px-3 rounded-xl bg-slate-100 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-800 text-[11px] font-semibold flex items-center justify-center space-x-1.5 transition cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>Use Sample Scrap Photo (Instant Demo)</span>
-              </button>
+            <div>
+              <label className="w-full py-6 px-4 rounded-2xl border-2 border-dashed border-emerald-400 hover:border-emerald-500 bg-emerald-50/50 hover:bg-emerald-50 flex flex-col items-center justify-center space-y-2 text-center cursor-pointer transition group shadow-2xs">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 group-hover:bg-emerald-200 text-emerald-700 flex items-center justify-center transition shadow-xs">
+                  <Camera className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-sm font-extrabold text-emerald-950 block">Take Photo from Camera</span>
+                  <span className="text-xs text-emerald-700 font-medium mt-0.5 block">Tap to open camera and capture scrap</span>
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </label>
             </div>
           )}
 
