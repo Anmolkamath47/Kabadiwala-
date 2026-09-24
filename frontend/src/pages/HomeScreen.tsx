@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useOrder } from '../context/OrderContext';
 import { dealerService } from '../services/dealerService';
 import { socketService } from '../services/socketService';
-import { Dealer, ScrapCategory, SavedAddress } from '../types';
+import { Dealer, ScrapCategory } from '../types';
 import { reconcileCityCoordinates } from '../utils/geoUtils';
 import { AppHeader } from '../components/layout/AppHeader';
 import { BottomNav } from '../components/layout/BottomNav';
@@ -22,9 +22,7 @@ import {
   IndianRupee,
   Navigation,
   Compass,
-  MapPin,
   Radio,
-  ExternalLink,
 } from 'lucide-react';
 
 export const HomeScreen: React.FC = () => {
@@ -33,7 +31,6 @@ export const HomeScreen: React.FC = () => {
   const { activeOrder } = useOrder();
 
   const [dealers, setDealers] = useState<Dealer[]>([]);
-  const [otherAreaDealers, setOtherAreaDealers] = useState<Dealer[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isDetectingGps, setIsDetectingGps] = useState<boolean>(false);
   const [searchRadius, setSearchRadius] = useState<number>(15);
@@ -74,16 +71,6 @@ export const HomeScreen: React.FC = () => {
           // If expanded search found 0 dealers, reset radius to standard 15km
           if ((!data.dealers || data.dealers.length === 0) && searchRadius > 25) {
             setSearchRadius(15);
-          }
-
-          // 2. If no dealers within radius, check if active dealers exist in other cities
-          if ((!data.dealers || data.dealers.length === 0) && searchRadius <= 25) {
-            const allActive = await dealerService.getAllActiveDealers(lat, lng);
-            if (isMountedRef.current) {
-              setOtherAreaDealers(allActive.dealers || []);
-            }
-          } else {
-            setOtherAreaDealers([]);
           }
         }
       } catch (err) {
@@ -166,17 +153,6 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
-  // Align location with an active dealer in another city
-  const handleAlignWithDealer = (dealer: Dealer) => {
-    const newLoc: SavedAddress = {
-      label: 'Home',
-      address: dealer.address || `${dealer.businessName} Service Area`,
-      coordinates: dealer.location.coordinates,
-      isDefault: true,
-    };
-    setSelectedLocation(newLoc);
-    setSearchRadius(15);
-  };
 
   const handleSelectDealer = (dealer: Dealer) => {
     navigate('/booking-confirm', { state: { dealer } });
@@ -355,55 +331,15 @@ export const HomeScreen: React.FC = () => {
                 </p>
               </div>
 
-              {/* Action Banner: Active Dealers Found in Other Cities/Areas */}
-              {otherAreaDealers.length > 0 && (
-                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-3.5 text-left space-y-2.5 shadow-2xs">
-                  <div className="flex items-center space-x-2 text-xs font-black text-emerald-900">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-                    <span>Active Dealer Online: {otherAreaDealers[0].businessName}</span>
-                  </div>
-                  <p className="text-[11px] text-emerald-800 leading-relaxed">
-                    Found {otherAreaDealers.length} verified scrap dealer(s) active in{' '}
-                    <span className="font-bold underline">{otherAreaDealers[0].address || 'other city'}</span>.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                    <button
-                      onClick={() => handleAlignWithDealer(otherAreaDealers[0])}
-                      className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-xs"
-                    >
-                      <MapPin className="w-3.5 h-3.5" />
-                      <span>Set Location to Dealer ({otherAreaDealers[0].distanceKm} km)</span>
-                    </button>
-                    <button
-                      onClick={() => setSearchRadius(5000)}
-                      className="py-2 px-3 bg-white hover:bg-slate-50 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1"
-                    >
-                      <span>Show All Active ({otherAreaDealers.length})</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Quick GPS Location Detection Button */}
-              <div className="pt-1 flex flex-col space-y-2">
+              <div className="pt-1">
                 <button
                   onClick={handleDetectGPS}
                   disabled={isDetectingGps}
-                  className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 shadow-xs disabled:opacity-50"
+                  className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 shadow-xs disabled:opacity-50 cursor-pointer"
                 >
                   <Compass className={`w-3.5 h-3.5 text-emerald-400 ${isDetectingGps ? 'animate-spin' : ''}`} />
                   <span>{isDetectingGps ? 'Detecting GPS...' : 'Use My Current GPS Location'}</span>
                 </button>
-
-                {otherAreaDealers.length > 0 && (
-                  <button
-                    onClick={() => setSearchRadius(5000)}
-                    className="w-full py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5"
-                  >
-                    <Radio className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Expand Search Radius ({otherAreaDealers.length} active in other areas)</span>
-                  </button>
-                )}
               </div>
             </div>
           ) : (
