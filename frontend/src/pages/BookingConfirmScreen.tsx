@@ -13,7 +13,55 @@ import {
   FileText,
   AlertCircle,
   ArrowRight,
+  Camera,
+  Image as ImageIcon,
+  Trash2,
+  ZoomIn,
+  CheckCircle2,
+  Sparkles,
+  X,
 } from 'lucide-react';
+
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1200;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve(e.target?.result as string);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
 
 export const BookingConfirmScreen: React.FC = () => {
   const location = useLocation();
@@ -51,6 +99,11 @@ export const BookingConfirmScreen: React.FC = () => {
     }));
   });
 
+  const [scrapPhoto, setScrapPhoto] = useState<string | null>(null);
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState<boolean>(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState<boolean>(false);
+
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,6 +121,48 @@ export const BookingConfirmScreen: React.FC = () => {
     return <Navigate to="/" replace />;
   }
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessingPhoto(true);
+    setPhotoError(null);
+    try {
+      const compressedDataUrl = await compressImage(file);
+      setScrapPhoto(compressedDataUrl);
+      setError(null);
+    } catch (err: any) {
+      console.error('Error processing scrap photo:', err);
+      setPhotoError('Failed to process image. Please try again.');
+    } finally {
+      setIsProcessingPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setScrapPhoto(null);
+    setPhotoError(null);
+  };
+
+  const handleUseSamplePhoto = async () => {
+    setIsProcessingPhoto(true);
+    setPhotoError(null);
+    try {
+      const response = await fetch('/sample_scrap_photo.jpg');
+      const blob = await response.blob();
+      const file = new File([blob], 'sample_scrap.jpg', { type: 'image/jpeg' });
+      const dataUrl = await compressImage(file);
+      setScrapPhoto(dataUrl);
+      setError(null);
+    } catch {
+      setScrapPhoto('/sample_scrap_photo.jpg');
+      setError(null);
+    } finally {
+      setIsProcessingPhoto(false);
+    }
+  };
+
   const handleCreateOrder = async () => {
     if (selectedMaterials.length === 0) {
       setError('Please select at least one scrap material to sell.');
@@ -84,7 +179,14 @@ export const BookingConfirmScreen: React.FC = () => {
       return;
     }
 
+    if (!scrapPhoto) {
+      setError('Please upload or capture a photo of your scrap before booking.');
+      setPhotoError('Scrap photo is required so the dealer can inspect before accepting.');
+      return;
+    }
+
     setError(null);
+    setPhotoError(null);
     setIsSubmitting(true);
 
     try {
@@ -98,6 +200,7 @@ export const BookingConfirmScreen: React.FC = () => {
           unit: m.unit,
           estimatedWeightKg: m.estimatedWeightKg,
         })),
+        scrapPhoto,
         notes: notes || undefined,
       });
 
@@ -192,6 +295,137 @@ export const BookingConfirmScreen: React.FC = () => {
           />
         </div>
 
+        {/* Scrap Photo Upload Card (Required for Dealer) */}
+        <div
+          id="scrap-photo-upload-section"
+          className={`bg-white p-4 rounded-2xl border transition shadow-card space-y-3 ${
+            photoError ? 'border-rose-400 ring-2 ring-rose-400/20' : 'border-slate-200'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-1.5">
+              <Camera className="w-4 h-4 text-emerald-600" />
+              <span className="text-xs font-bold text-slate-800">
+                Photo of Scrap <span className="text-rose-500">*</span>
+              </span>
+            </div>
+            {scrapPhoto ? (
+              <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center space-x-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                <span>Photo Ready</span>
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
+                Required for Dealer
+              </span>
+            )}
+          </div>
+
+          <p className="text-[11px] text-slate-500 leading-snug">
+            Please capture or upload a photo of your scrap pile. The dealer gets this same photo in their incoming notification to inspect and accept.
+          </p>
+
+          {scrapPhoto ? (
+            <div className="space-y-2">
+              <div
+                onClick={() => setShowPreviewModal(true)}
+                className="relative h-44 rounded-xl overflow-hidden cursor-pointer group bg-slate-900 border border-slate-200 shadow-xs"
+                title="Tap to preview full photo"
+              >
+                <img
+                  src={scrapPhoto}
+                  alt="Scrap Preview"
+                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                />
+                <div className="absolute inset-0 bg-black/25 group-hover:bg-black/10 transition flex items-center justify-center">
+                  <span className="bg-slate-900/80 backdrop-blur-md text-white text-xs font-bold py-1.5 px-3 rounded-xl flex items-center space-x-1.5 opacity-90 group-hover:opacity-100 transition shadow-md">
+                    <ZoomIn className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Tap to View Full Photo</span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <label className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center space-x-1.5 cursor-pointer transition">
+                  <Camera className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Retake / Change</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={handleRemovePhoto}
+                  className="py-2.5 px-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold flex items-center justify-center space-x-1.5 transition cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Remove</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              <div className="grid grid-cols-2 gap-2.5">
+                <label className="p-3.5 rounded-xl border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/50 hover:bg-emerald-50 flex flex-col items-center justify-center space-y-1.5 text-center cursor-pointer transition group">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 group-hover:bg-emerald-200 text-emerald-700 flex items-center justify-center transition">
+                    <Camera className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-extrabold text-emerald-900">Take Photo</span>
+                  <span className="text-[10px] text-emerald-700 font-medium">Use Camera</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </label>
+
+                <label className="p-3.5 rounded-xl border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50 hover:bg-slate-100 flex flex-col items-center justify-center space-y-1.5 text-center cursor-pointer transition group">
+                  <div className="w-8 h-8 rounded-full bg-slate-200 group-hover:bg-emerald-100 text-slate-700 group-hover:text-emerald-700 flex items-center justify-center transition">
+                    <ImageIcon className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-extrabold text-slate-900">Upload Gallery</span>
+                  <span className="text-[10px] text-slate-500 font-medium">Choose File</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* Quick sample scrap photo option for easy demonstration */}
+              <button
+                type="button"
+                onClick={handleUseSamplePhoto}
+                className="w-full py-2 px-3 rounded-xl bg-slate-100 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-800 text-[11px] font-semibold flex items-center justify-center space-x-1.5 transition cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>Use Sample Scrap Photo (Instant Demo)</span>
+              </button>
+            </div>
+          )}
+
+          {isProcessingPhoto && (
+            <div className="flex items-center space-x-2 text-xs text-emerald-700 font-medium pt-1">
+              <div className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+              <span>Optimizing scrap photo for dealer notification...</span>
+            </div>
+          )}
+
+          {photoError && (
+            <p className="text-[11px] text-rose-600 font-semibold pt-1">
+              {photoError}
+            </p>
+          )}
+        </div>
+
         {/* Additional Notes input */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-card">
           <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center space-x-1">
@@ -259,6 +493,52 @@ export const BookingConfirmScreen: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Full Photo Preview Lightbox Modal */}
+      {showPreviewModal && scrapPhoto && (
+        <div
+          onClick={() => setShowPreviewModal(false)}
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl relative"
+          >
+            <div className="p-3 bg-slate-800/90 border-b border-slate-700 flex items-center justify-between text-white">
+              <div className="flex items-center space-x-2 text-xs font-bold">
+                <Camera className="w-4 h-4 text-emerald-400" />
+                <span>Your Scrap Photo (Sent to Dealer)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPreviewModal(false)}
+                className="p-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="relative max-h-[70vh] overflow-hidden bg-black flex items-center justify-center">
+              <img
+                src={scrapPhoto}
+                alt="Full Scrap Preview"
+                className="w-full max-h-[70vh] object-contain"
+              />
+            </div>
+
+            <div className="p-3 bg-slate-800 text-slate-300 text-xs flex items-center justify-between">
+              <span>Ready for booking</span>
+              <button
+                type="button"
+                onClick={() => setShowPreviewModal(false)}
+                className="text-emerald-400 font-bold hover:underline cursor-pointer"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

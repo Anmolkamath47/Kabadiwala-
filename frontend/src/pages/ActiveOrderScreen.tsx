@@ -25,6 +25,8 @@ import {
   Send,
   ExternalLink,
   ChevronRight,
+  Camera,
+  ZoomIn,
 } from 'lucide-react';
 import { getVehicleDetails } from '../utils/vehicleUtils';
 import { orderChatService, OrderChatMessage } from '../services/orderChatService';
@@ -42,6 +44,7 @@ export const ActiveOrderScreen: React.FC = () => {
 
   const [order, setOrder] = useState(activeOrder);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [showPhotoPreview, setShowPhotoPreview] = useState(false);
   const [ratingScore, setRatingScore] = useState(5);
   const [ratingFeedback, setRatingFeedback] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>(['On Time', 'Accurate Weighing']);
@@ -642,6 +645,39 @@ export const ActiveOrderScreen: React.FC = () => {
           </div>
         </div>
 
+        {/* Uploaded Scrap Photo Card (Shared with Dealer) */}
+        {order.scrapPhoto && (
+          <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-card space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-800">
+                <Camera className="w-4 h-4 text-emerald-600" />
+                <span>Uploaded Scrap Photo</span>
+              </div>
+              <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                Shared with Dealer
+              </span>
+            </div>
+
+            <div
+              onClick={() => setShowPhotoPreview(true)}
+              className="relative h-44 rounded-2xl overflow-hidden cursor-pointer group bg-slate-950 border border-slate-200 shadow-xs"
+              title="Click to view full photo"
+            >
+              <img
+                src={order.scrapPhoto}
+                alt="Uploaded Scrap"
+                className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+              />
+              <div className="absolute inset-0 bg-black/25 group-hover:bg-black/10 transition flex items-center justify-center">
+                <span className="bg-slate-900/80 backdrop-blur-md text-white text-xs font-bold py-1.5 px-3 rounded-xl flex items-center space-x-1.5 opacity-90 group-hover:opacity-100 transition shadow-md">
+                  <ZoomIn className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Tap to View Full Photo</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Pickup Address Card */}
         <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-card space-y-1">
           <div className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
@@ -769,6 +805,51 @@ export const ActiveOrderScreen: React.FC = () => {
                 <Send className="w-4 h-4" />
               </button>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Full Photo Preview Lightbox Modal */}
+      {showPhotoPreview && order.scrapPhoto && (
+        <div
+          onClick={() => setShowPhotoPreview(false)}
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl relative"
+          >
+            <div className="p-3 bg-slate-800/90 border-b border-slate-700 flex items-center justify-between text-white">
+              <div className="flex items-center space-x-2 text-xs font-bold">
+                <Camera className="w-4 h-4 text-emerald-400" />
+                <span>Your Scrap Photo (Sent to Dealer)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPhotoPreview(false)}
+                className="p-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="relative max-h-[70vh] overflow-hidden bg-black flex items-center justify-center">
+              <img
+                src={order.scrapPhoto}
+                alt="Full Scrap View"
+                className="w-full max-h-[70vh] object-contain"
+              />
+            </div>
+
+            <div className="p-3 bg-slate-800 text-slate-300 text-xs flex items-center justify-between">
+              <span>Order #{order.orderId}</span>
+              <button
+                type="button"
+                onClick={() => setShowPhotoPreview(false)}
+                className="text-emerald-400 font-bold hover:underline cursor-pointer"
+              >
+                Close Preview
+              </button>
+            </div>
           </div>
         </div>
       )}

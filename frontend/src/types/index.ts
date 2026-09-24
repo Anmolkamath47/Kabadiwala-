@@ -141,6 +141,7 @@ export interface Order {
   dealerLiveLocation?: DealerLiveLocation;
   cancellationReason?: string;
   rated: boolean;
+  scrapPhoto?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;

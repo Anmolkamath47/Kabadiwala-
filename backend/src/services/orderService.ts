@@ -51,6 +51,7 @@ export class OrderService {
         unit: 'kg' | 'piece';
         estimatedWeightKg: number;
       }>;
+      scrapPhoto?: string;
       notes?: string;
     }
   ): Promise<IOrder> {
@@ -157,6 +158,7 @@ export class OrderService {
         isVerified: false,
       },
       dealerLiveLocation: initialLocation,
+      scrapPhoto: data.scrapPhoto,
       notes: data.notes,
     });
 

@@ -17,6 +17,7 @@ export const CreateOrderSchema = z.object({
       })
     )
     .min(1, 'At least one scrap item must be selected'),
+  scrapPhoto: z.string().optional(),
   notes: z.string().optional(),
 });
 

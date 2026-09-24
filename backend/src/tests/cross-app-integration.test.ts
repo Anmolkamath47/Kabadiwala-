@@ -131,6 +131,7 @@ async function runCrossAppIntegrationTests() {
             estimatedWeightKg: 10,
           },
         ],
+        scrapPhoto: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD_TEST_SCRAP_PHOTO_PAYLOAD',
         notes: 'Please call before arrival',
       },
       { headers: consumerHeaders }
@@ -142,6 +143,7 @@ async function runCrossAppIntegrationTests() {
     const otpCode = createdOrder.otp.code;
     assert(createdOrder.status === 'PENDING', 'Order starts in PENDING status on Kabadiwala');
     assert(!!otpCode && otpCode.length === 4, `Order generated 4-digit pickup OTP: ${otpCode}`);
+    assert(!!createdOrder.scrapPhoto, 'Scrap photo persisted in Kabadiwala order');
 
     // ========================================================
     // 4. Notify dealer
@@ -156,6 +158,10 @@ async function runCrossAppIntegrationTests() {
     assert(dealerOrderRes.status === 200, 'Kabadidealer received order via REST webhook');
     assert(dealerOrderRes.data.data.orderId === orderId, 'Order ID matches in Kabadidealer DB');
     assert(dealerOrderRes.data.data.status === 'PENDING', 'Kabadidealer order is PENDING dealer acceptance');
+    assert(
+      dealerOrderRes.data.data.scrapPhoto === createdOrder.scrapPhoto,
+      'Dealer received exact scrap photo uploaded by consumer with notification'
+    );
 
     // ========================================================
     // 5. Receive dealer acceptance

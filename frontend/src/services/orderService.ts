@@ -12,6 +12,7 @@ export const orderService = {
       unit: string;
       estimatedWeightKg: number;
     }>;
+    scrapPhoto?: string;
     notes?: string;
   }): Promise<Order> {
     const res = await api.post('/orders', data);

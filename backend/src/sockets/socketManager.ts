@@ -103,6 +103,7 @@ export const socketEvents = {
       pickupLocation: orderData.pickupLocation,
       selectedMaterials: orderData.selectedMaterials,
       estimatedTotalAmount: orderData.estimatedTotalAmount,
+      scrapPhoto: orderData.scrapPhoto,
       createdAt: orderData.createdAt,
     });
   },

@@ -216,6 +216,7 @@ export class DealerGatewayService {
           selectedMaterials: order.selectedMaterials,
           estimatedTotalAmount: order.estimatedTotalAmount,
           otpCode: order.otp?.code,
+          scrapPhoto: order.scrapPhoto,
           notes: order.notes,
         },
         {

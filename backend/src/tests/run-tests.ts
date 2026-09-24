@@ -106,12 +106,14 @@ async function runTestSuite() {
         { category: 'Paper', name: 'Newspaper (Raddi)', unit: 'kg', estimatedWeightKg: 15 },
         { category: 'Metal', name: 'Iron / Steel Scrap (Loha)', unit: 'kg', estimatedWeightKg: 10 },
       ],
+      scrapPhoto: 'data:image/jpeg;base64,test_scrap_photo_base64',
       notes: 'Please bring digital weighing scale',
     });
 
     assert(newOrder.status === 'PENDING', 'New order starts in PENDING status');
     assert(!!newOrder.orderId && newOrder.orderId.startsWith('KBD-'), `Generated Order ID: ${newOrder.orderId}`);
     assert(!!newOrder.otp.code && newOrder.otp.code.length === 4, `Generated 4-digit pickup OTP: ${newOrder.otp.code}`);
+    assert(newOrder.scrapPhoto === 'data:image/jpeg;base64,test_scrap_photo_base64', 'Scrap photo attached by consumer preserved in order');
     assert(newOrder.estimatedTotalAmount > 0, `Estimated scrap amount calculated: ₹${newOrder.estimatedTotalAmount}`);
 
     // Transition 1: ACCEPTED
