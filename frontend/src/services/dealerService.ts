@@ -3,16 +3,30 @@ import api from './api';
 import { Dealer, ScrapCategory, CategoryCardInfo, ScrapRateItem } from '../types';
 import { reconcileCityCoordinates } from '../utils/geoUtils';
 
+export const DEFAULT_EWASTE_ITEMS: ScrapRateItem[] = [
+  { category: 'E-Waste', name: 'Old Electronics & CPU Boards', unit: 'kg', pricePerKg: 55, minQuantityKg: 1, icon: 'cpu' },
+  { category: 'E-Waste', name: 'Broken Laptops & Computers', unit: 'piece', pricePerKg: 250, minQuantityKg: 1, icon: 'laptop' },
+  { category: 'E-Waste', name: 'Old Mobile Phones & Tablets', unit: 'piece', pricePerKg: 120, minQuantityKg: 1, icon: 'smartphone' },
+];
+
 export const prioritizeEWasteRates = (rates: ScrapRateItem[]): ScrapRateItem[] => {
   if (!rates || !Array.isArray(rates)) return [];
-  const ewaste = rates.filter((r) => r.category === 'E-Waste');
-  const others = rates.filter((r) => r.category !== 'E-Waste');
+  let list = [...rates];
+  for (const item of DEFAULT_EWASTE_ITEMS) {
+    if (!list.some((r) => r.name.toLowerCase() === item.name.toLowerCase())) {
+      list.push(item);
+    }
+  }
+  const ewaste = list.filter((r) => r.category === 'E-Waste');
+  const others = list.filter((r) => r.category !== 'E-Waste');
   return [...ewaste, ...others];
 };
 
 // Standard verified scrap rate catalogue with E-Waste prioritized first
 const DEFAULT_SCRAP_RATES: ScrapRateItem[] = [
   { category: 'E-Waste', name: 'Old Electronics & CPU Boards', unit: 'kg', pricePerKg: 55, minQuantityKg: 1, icon: 'cpu' },
+  { category: 'E-Waste', name: 'Broken Laptops & Computers', unit: 'piece', pricePerKg: 250, minQuantityKg: 1, icon: 'laptop' },
+  { category: 'E-Waste', name: 'Old Mobile Phones & Tablets', unit: 'piece', pricePerKg: 120, minQuantityKg: 1, icon: 'smartphone' },
   { category: 'Paper', name: 'Newspaper (Raddi)', unit: 'kg', pricePerKg: 14, minQuantityKg: 5, icon: 'newspaper' },
   { category: 'Paper', name: 'Books & Notebooks', unit: 'kg', pricePerKg: 12, minQuantityKg: 5, icon: 'book' },
   { category: 'Cardboard', name: 'Corrugated Cardboard (Gatta)', unit: 'kg', pricePerKg: 10, minQuantityKg: 5, icon: 'box' },
