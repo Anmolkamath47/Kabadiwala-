@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrapRateItem, SelectedMaterialItem } from '../../types';
-import { Plus, Minus, Check, Sparkles, Zap } from 'lucide-react';
+import { Plus, Minus, Check, Sparkles } from 'lucide-react';
 
 interface MaterialSelectorProps {
   availableRates: ScrapRateItem[];
@@ -81,18 +81,13 @@ export const MaterialSelector: React.FC<MaterialSelectorProps> = ({
         {sortedRates.map((rate, idx) => {
           const selected = isSelected(rate);
           const currentItem = getSelectedItem(rate);
-          const isEWaste = rate.category === 'E-Waste';
 
           return (
             <div
               key={idx}
               className={`p-3 rounded-2xl border transition duration-150 ${
                 selected
-                  ? isEWaste
-                    ? 'border-amber-400 bg-amber-50/50 shadow-xs ring-1 ring-amber-300/30'
-                    : 'border-emerald-500 bg-emerald-50/40 shadow-xs'
-                  : isEWaste
-                  ? 'border-amber-200/80 bg-amber-50/20 hover:border-amber-300'
+                  ? 'border-emerald-500 bg-emerald-50/40 shadow-xs'
                   : 'border-slate-200 bg-white hover:border-slate-300'
               }`}
             >
@@ -105,26 +100,16 @@ export const MaterialSelector: React.FC<MaterialSelectorProps> = ({
                   <div
                     className={`w-6 h-6 rounded-lg flex items-center justify-center border transition ${
                       selected
-                        ? isEWaste
-                          ? 'bg-amber-500 border-amber-500 text-white'
-                          : 'bg-emerald-600 border-emerald-600 text-white'
+                        ? 'bg-emerald-600 border-emerald-600 text-white'
                         : 'border-slate-300 bg-white text-transparent'
                     }`}
                   >
                     <Check className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center space-x-1.5">
-                      <span className="text-xs font-bold text-slate-900 truncate">{rate.name}</span>
-                      {isEWaste && (
-                        <span className="inline-flex items-center space-x-0.5 px-1.5 py-0.2 rounded-md text-[8px] font-black bg-amber-500 text-white flex-shrink-0 shadow-2xs">
-                          <Zap className="w-2 h-2 fill-white" />
-                          <span>PRIORITY</span>
-                        </span>
-                      )}
-                    </div>
+                    <div className="text-xs font-bold text-slate-900 truncate">{rate.name}</div>
                     <div className="text-[11px] text-slate-500">
-                      Rate: <span className={`font-bold ${isEWaste ? 'text-amber-700' : 'text-emerald-700'}`}>₹{rate.pricePerKg}</span>/{rate.unit}
+                      Rate: <span className="font-bold text-emerald-700">₹{rate.pricePerKg}</span>/{rate.unit}
                     </div>
                   </div>
                 </button>
