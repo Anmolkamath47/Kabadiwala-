@@ -3,8 +3,18 @@ import api from './api';
 import { Dealer, ScrapCategory, CategoryCardInfo, ScrapRateItem } from '../types';
 import { reconcileCityCoordinates } from '../utils/geoUtils';
 
-// Standard verified scrap rate catalogue
+export const prioritizeEWasteRates = (rates: ScrapRateItem[]): ScrapRateItem[] => {
+  if (!rates || !Array.isArray(rates)) return [];
+  const ewaste = rates.filter((r) => r.category === 'E-Waste');
+  const others = rates.filter((r) => r.category !== 'E-Waste');
+  return [...ewaste, ...others];
+};
+
+// Standard verified scrap rate catalogue with E-Waste prioritized first
 const DEFAULT_SCRAP_RATES: ScrapRateItem[] = [
+  { category: 'E-Waste', name: 'Old Electronics & CPU Boards', unit: 'kg', pricePerKg: 55, minQuantityKg: 1, icon: 'cpu' },
+  { category: 'E-Waste', name: 'Broken Laptops & Computers', unit: 'piece', pricePerKg: 250, minQuantityKg: 1, icon: 'laptop' },
+  { category: 'E-Waste', name: 'Old Mobile Phones & Tablets', unit: 'piece', pricePerKg: 120, minQuantityKg: 1, icon: 'smartphone' },
   { category: 'Paper', name: 'Newspaper (Raddi)', unit: 'kg', pricePerKg: 14, minQuantityKg: 5, icon: 'newspaper' },
   { category: 'Paper', name: 'Books & Notebooks', unit: 'kg', pricePerKg: 12, minQuantityKg: 5, icon: 'book' },
   { category: 'Cardboard', name: 'Corrugated Cardboard (Gatta)', unit: 'kg', pricePerKg: 10, minQuantityKg: 5, icon: 'box' },
@@ -14,11 +24,11 @@ const DEFAULT_SCRAP_RATES: ScrapRateItem[] = [
   { category: 'Aluminium', name: 'Aluminium Cans & Utensils', unit: 'kg', pricePerKg: 145, minQuantityKg: 1, icon: 'utensils' },
   { category: 'Copper', name: 'Pure Copper Wire (Taamba)', unit: 'kg', pricePerKg: 490, minQuantityKg: 0.5, icon: 'zap' },
   { category: 'Brass', name: 'Brass Items (Peetal)', unit: 'kg', pricePerKg: 340, minQuantityKg: 0.5, icon: 'shield' },
-  { category: 'E-Waste', name: 'Old Electronics & CPU Boards', unit: 'kg', pricePerKg: 55, minQuantityKg: 1, icon: 'cpu' },
   { category: 'Glass', name: 'Glass Bottles', unit: 'kg', pricePerKg: 4, minQuantityKg: 5, icon: 'wine' },
 ];
 
 const DEFAULT_CATEGORIES: CategoryCardInfo[] = [
+  { id: 'E-Waste', name: 'Electronic Waste', icon: 'cpu', avgPrice: 55, unit: 'kg', description: 'Laptops, mobile phones, printed circuit boards, and wires' },
   { id: 'Paper', name: 'Newspaper & Books', icon: 'newspaper', avgPrice: 14, unit: 'kg', description: 'Old newspapers, magazines, office paper, and student notebooks' },
   { id: 'Cardboard', name: 'Cardboard & Cartons', icon: 'box', avgPrice: 10, unit: 'kg', description: 'Corrugated packing boxes, cartons, and packaging gatta' },
   { id: 'Plastic', name: 'Plastics & PET Bottles', icon: 'bottle', avgPrice: 18, unit: 'kg', description: 'Clean PET bottles, plastic buckets, containers, and household PVC' },
@@ -26,7 +36,6 @@ const DEFAULT_CATEGORIES: CategoryCardInfo[] = [
   { id: 'Aluminium', name: 'Aluminium Scrap', icon: 'utensils', avgPrice: 145, unit: 'kg', description: 'Aluminium cans, sheets, window frames, and kitchen utensils' },
   { id: 'Copper', name: 'Copper Wires', icon: 'zap', avgPrice: 490, unit: 'kg', description: 'Electrical copper wiring, armature motors, and pipes' },
   { id: 'Brass', name: 'Brass (Peetal)', icon: 'shield', avgPrice: 340, unit: 'kg', description: 'Brass utensils, antique items, valves, and decorative items' },
-  { id: 'E-Waste', name: 'Electronic Waste', icon: 'cpu', avgPrice: 55, unit: 'kg', description: 'Laptops, mobile phones, printed circuit boards, and wires' },
   { id: 'Glass', name: 'Glass Bottles', icon: 'wine', avgPrice: 4, unit: 'kg', description: 'Intact glass bottles, beverage jars, and glass containers' },
 ];
 
@@ -154,6 +163,7 @@ const mergePartnerDealer = (
           (r: any) => r.category?.toLowerCase() === category.toLowerCase()
         );
       }
+      scrapRates = prioritizeEWasteRates(scrapRates);
 
       const dynamicDealer: Dealer = {
         dealerId: parsed.dealerId,
@@ -389,6 +399,7 @@ export const dealerService = {
         if (category) {
           rates = rates.filter((r) => r.category.toLowerCase() === category.toLowerCase());
         }
+        rates = prioritizeEWasteRates(rates);
 
         results.push({
           dealerId: d.dealerId,

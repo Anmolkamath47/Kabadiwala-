@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal } from '../common/Modal';
 import { Dealer, ScrapCategory } from '../../types';
-import { Star, ShieldCheck, Truck, MapPin, Phone, ArrowRight } from 'lucide-react';
+import { Star, ShieldCheck, Truck, MapPin, Phone, ArrowRight, Zap } from 'lucide-react';
 
 interface DealerDetailsModalProps {
   dealer: Dealer | null;
@@ -20,12 +20,24 @@ export const DealerDetailsModal: React.FC<DealerDetailsModalProps> = ({
 
   if (!dealer) return null;
 
-  const categories = ['ALL', ...Array.from(new Set(dealer.scrapRates.map((r) => r.category)))];
+  const rawCats = Array.from(new Set(dealer.scrapRates.map((r) => r.category)));
+  const sortedCats = rawCats.sort((a, b) => {
+    if (a === 'E-Waste') return -1;
+    if (b === 'E-Waste') return 1;
+    return 0;
+  });
+  const categories = ['ALL', ...sortedCats];
 
-  const filteredRates =
+  const rawRates =
     selectedCategory === 'ALL'
       ? dealer.scrapRates
       : dealer.scrapRates.filter((r) => r.category === selectedCategory);
+
+  const filteredRates = [...rawRates].sort((a, b) => {
+    if (a.category === 'E-Waste' && b.category !== 'E-Waste') return -1;
+    if (a.category !== 'E-Waste' && b.category === 'E-Waste') return 1;
+    return 0;
+  });
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Scrap Dealer Profile">
@@ -92,12 +104,24 @@ export const DealerDetailsModal: React.FC<DealerDetailsModalProps> = ({
           {filteredRates.map((item, idx) => (
             <div
               key={idx}
-              className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-emerald-200 bg-white transition"
+              className={`flex items-center justify-between p-2.5 rounded-xl border transition ${
+                item.category === 'E-Waste'
+                  ? 'bg-amber-50/50 border-amber-200 hover:border-amber-300'
+                  : 'bg-white border-slate-100 hover:border-emerald-200'
+              }`}
             >
               <div>
-                <div className="text-xs font-bold text-slate-900">{item.name}</div>
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-xs font-bold text-slate-900">{item.name}</span>
+                  {item.category === 'E-Waste' && (
+                    <span className="inline-flex items-center space-x-0.5 px-1.5 py-0.2 rounded-md text-[8px] font-black bg-amber-500 text-white shadow-2xs">
+                      <Zap className="w-2 h-2 fill-white" />
+                      <span>PRIORITY</span>
+                    </span>
+                  )}
+                </div>
                 <div className="text-[10px] text-slate-400">
-                  Category: {item.category} {item.minQuantityKg ? `· Min: ${item.minQuantityKg} ${item.unit}` : ''}
+                  Category: <span className={item.category === 'E-Waste' ? 'text-amber-800 font-semibold' : ''}>{item.category}</span> {item.minQuantityKg ? `· Min: ${item.minQuantityKg} ${item.unit}` : ''}
                 </div>
               </div>
               <div className="text-right">

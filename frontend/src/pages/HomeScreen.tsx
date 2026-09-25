@@ -44,13 +44,13 @@ export const HomeScreen: React.FC = () => {
 
   const categories: Array<{ id: ScrapCategory | 'ALL'; name: string; icon: string }> = [
     { id: 'ALL', name: 'All Scrap', icon: '♻️' },
+    { id: 'E-Waste', name: 'E-Waste', icon: '💻' },
     { id: 'Paper', name: 'Newspaper', icon: '📰' },
     { id: 'Cardboard', name: 'Cardboard', icon: '📦' },
     { id: 'Plastic', name: 'Plastics', icon: '🧴' },
     { id: 'Metal', name: 'Iron & Steel', icon: '⚙️' },
     { id: 'Aluminium', name: 'Aluminium', icon: '🥫' },
     { id: 'Copper', name: 'Copper Wire', icon: '⚡' },
-    { id: 'E-Waste', name: 'E-Waste', icon: '💻' },
     { id: 'Glass', name: 'Bottles', icon: '🍾' },
   ];
 
