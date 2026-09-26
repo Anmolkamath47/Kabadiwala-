@@ -27,7 +27,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { getVehicleDetails } from '../utils/vehicleUtils';
-import { orderChatService, OrderChatMessage } from '../services/orderChatService';
+import { orderChatService, OrderChatMessage, formatChatTime } from '../services/orderChatService';
 
 export const ActiveOrderScreen: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -723,7 +723,9 @@ export const ActiveOrderScreen: React.FC = () => {
                   >
                     {msg.text}
                   </div>
-                  <span className="text-[9px] text-slate-400 mt-1 px-1">{msg.formattedTime || msg.timestamp}</span>
+                  <span className="text-[9px] text-slate-400 mt-1 px-1">
+                    {formatChatTime(msg.timestamp, msg.formattedTime)}
+                  </span>
                 </div>
               ))}
             </div>
