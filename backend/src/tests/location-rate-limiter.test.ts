@@ -92,6 +92,14 @@ export async function runLocationRateLimiterTests(): Promise<{ passed: number; t
       if (res.status === 200 && res.data.success) {
         s1SuccessCount++;
       }
+      if (i === 0) {
+        assert(res.headers['x-ratelimit-geohash'] === 'tdr1v9', 'First request contains X-RateLimit-Geohash: tdr1v9');
+        assert(res.headers['x-ratelimit-limit-location'] === '20', 'First request contains X-RateLimit-Limit-Location: 20');
+        assert(res.headers['x-ratelimit-remaining-location'] === '19', 'First request contains X-RateLimit-Remaining-Location: 19');
+        assert(res.headers['x-ratelimit-limit-ip'] === '10', 'First request contains X-RateLimit-Limit-IP: 10');
+        assert(res.headers['x-ratelimit-remaining-ip'] === '9', 'First request contains X-RateLimit-Remaining-IP: 9');
+        assert(!!res.headers['access-control-expose-headers'], 'Response contains Access-Control-Expose-Headers for CORS browsers');
+      }
     }
     assert(s1SuccessCount === 5, 'Requests within IP & Location limit succeed with HTTP 200');
 
