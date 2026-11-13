@@ -199,6 +199,9 @@ export const createLocationAndIpRateLimiter = (
       );
 
       if (ipRecord.totalHits > maxIpRequests) {
+        console.warn(
+          `🚫 [RateLimiter] IP limit exceeded: ${clientIp} (${ipRecord.totalHits}/${maxIpRequests} req/min)`
+        );
         const retryAfterSec = Math.max(1, Math.ceil((ipRecord.resetTime - Date.now()) / 1000));
         res.setHeader('Retry-After', retryAfterSec.toString());
         res.setHeader('X-RateLimit-Reset', Math.ceil(ipRecord.resetTime / 1000).toString());
@@ -265,7 +268,14 @@ export const createLocationAndIpRateLimiter = (
       );
       res.setHeader('X-RateLimit-Geohash', geohash);
 
+      console.log(
+        `🛡️ [RateLimiter] IP: ${clientIp} (${ipRecord.totalHits}/${maxIpRequests}) | Geohash: ${geohash} (${locationRecord.totalHits}/${maxLocationRequests})`
+      );
+
       if (locationRecord.totalHits > maxLocationRequests) {
+        console.warn(
+          `🚫 [RateLimiter] Location limit exceeded for Geohash ${geohash} (${locationRecord.totalHits}/${maxLocationRequests} req/min)`
+        );
         const retryAfterSec = Math.max(1, Math.ceil((locationRecord.resetTime - Date.now()) / 1000));
         res.setHeader('Retry-After', retryAfterSec.toString());
 
