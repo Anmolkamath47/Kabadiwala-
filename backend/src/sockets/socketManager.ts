@@ -60,7 +60,6 @@ export const initSocketServer = (httpServer: HttpServer): Server => {
     socket.on('join:dealer', ({ dealerId }: { dealerId: string }) => {
       if (dealerId) {
         socket.join(`dealer:${dealerId}`);
-        socket.join('dealers:all');
         console.log(`🚛 Dealer Socket ${socket.id} joined dealer room: ${dealerId}`);
       }
     });
@@ -96,7 +95,7 @@ export const socketEvents = {
    */
   emitNewPickupAlert: (dealerId: string, orderData: any) => {
     if (!ioInstance) return;
-    ioInstance.to(`dealer:${dealerId}`).to('dealers:all').emit('pickup:new', {
+    ioInstance.to(`dealer:${dealerId}`).emit('pickup:new', {
       orderId: orderData.orderId,
       consumerId: orderData.consumerId,
       pickupAddress: orderData.pickupAddress,

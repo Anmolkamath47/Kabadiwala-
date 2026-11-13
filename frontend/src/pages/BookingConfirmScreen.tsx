@@ -324,7 +324,8 @@ export const BookingConfirmScreen: React.FC = () => {
                     accept="image/*"
                     capture="environment"
                     onChange={handleFileChange}
-                    className="hidden"
+                    className="sr-only"
+                    tabIndex={-1}
                   />
                 </label>
 
@@ -353,7 +354,8 @@ export const BookingConfirmScreen: React.FC = () => {
                   accept="image/*"
                   capture="environment"
                   onChange={handleFileChange}
-                  className="hidden"
+                  className="sr-only"
+                  tabIndex={-1}
                 />
               </label>
             </div>
