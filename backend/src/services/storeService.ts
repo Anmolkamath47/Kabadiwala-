@@ -173,7 +173,7 @@ export class StoreService {
         phone: dealer.phone,
         rating: dealer.rating || 4.9,
         totalRatings: dealer.totalRatings || 18,
-        address: dealer.address || dealer.location?.address || 'Service Hub',
+        address: dealer.address || (dealer.location as any)?.address || 'Service Hub',
         city: 'Delhi NCR',
         location: dealer.location,
         productCount: prods.length,

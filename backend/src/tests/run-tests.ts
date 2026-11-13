@@ -352,6 +352,12 @@ async function runTestSuite() {
     const searchNew = await StoreService.getProducts({ search: 'SolarClean' });
     assert(searchNew.products.length >= 1, 'Newly added product by recycler immediately available in marketplace');
 
+    // 10. Location-Based and IP Rate Limiting Tests
+    const { runLocationRateLimiterTests } = await import('./location-rate-limiter.test.js');
+    const rateLimitResults = await runLocationRateLimiterTests();
+    passedTests += rateLimitResults.passed;
+    totalTests += rateLimitResults.total;
+
     console.log('\n========================================================');
     console.log(`📊 TEST SUMMARY: ${passedTests} / ${totalTests} TESTS PASSED`);
     console.log('========================================================\n');

@@ -6,12 +6,13 @@ import {
 } from '../controllers/orderController.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { validateRequest } from '../middleware/validationMiddleware.js';
+import { bookingRateLimiter } from '../middleware/locationRateLimiter.js';
 
 const router = Router();
 
 router.use(requireAuth);
 
-router.post('/', validateRequest(CreateOrderSchema), OrderController.createOrder);
+router.post('/', bookingRateLimiter, validateRequest(CreateOrderSchema), OrderController.createOrder);
 router.get('/', OrderController.getConsumerOrders);
 router.get('/:orderId', OrderController.getOrderDetails);
 router.post('/:orderId/cancel', validateRequest(CancelOrderSchema), OrderController.cancelOrder);

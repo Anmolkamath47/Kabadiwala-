@@ -36,5 +36,9 @@ export const config = {
   dealerServiceApiKey: process.env.DEALER_SERVICE_API_KEY || 'kbad_shared_internal_secret_key_9988',
   otpDemoCode: process.env.OTP_DEMO_CODE || '1234',
   defaultSearchRadiusKm: 15,
+  redisUrl: process.env.REDIS_URL || process.env.REDIS_TLS_URL || '',
+  rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10),
+  locationRateLimitMax: parseInt(process.env.LOCATION_RATE_LIMIT_MAX || '20', 10),
+  ipRateLimitMax: parseInt(process.env.IP_RATE_LIMIT_MAX || '10', 10),
 };
 
