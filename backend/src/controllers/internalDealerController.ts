@@ -1,0 +1,351 @@
+import { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
+import { OrderService } from '../services/orderService.js';
+import { DealerGatewayService } from '../services/dealerGatewayService.js';
+import { DealerSnapshot } from '../models/DealerSnapshot.js';
+import { Order } from '../models/Order.js';
+import { socketEvents } from '../sockets/socketManager.js';
+import { StoreService } from '../services/storeService.js';
+
+export const DealerPresenceSchema = z.object({
+  dealerId: z.string(),
+  phone: z.string().optional(),
+  businessName: z.string().optional(),
+  contactPerson: z.string().optional(),
+  profileImage: z.string().optional(),
+  isOnline: z.boolean().optional().default(true),
+  isAvailable: z.boolean().optional(),
+  rating: z.number().optional(),
+  totalRatings: z.number().optional(),
+  location: z.any().optional(),
+  vehicleType: z.string().optional(),
+  vehicleNumber: z.string().optional(),
+  scrapRates: z.array(z.any()).optional(),
+  activeRadiusKm: z.number().optional(),
+});
+
+export const DealerStatusTransitionSchema = z.object({
+  orderId: z.string(),
+  dealerId: z.string(),
+  status: z.enum([
+    'ACCEPTED',
+    'DEALER_EN_ROUTE',
+    'ARRIVED',
+    'OTP_PENDING',
+    'COMPLETED',
+    'REJECTED',
+  ]),
+  note: z.string().optional(),
+  finalWeights: z
+    .array(
+      z.object({
+        category: z.string(),
+        name: z.string(),
+        unit: z.enum(['kg', 'piece']).default('kg'),
+        pricePerKg: z.number(),
+        actualWeightKg: z.number().positive(),
+        finalAmount: z.number().positive(),
+      })
+    )
+    .optional(),
+  finalTotalAmount: z.number().optional(),
+  scrapPhoto: z.string().optional(),
+  dealerLocation: z
+    .object({
+      coordinates: z.tuple([z.number(), z.number()]),
+      heading: z.number().optional(),
+      speed: z.number().optional(),
+      etaMinutes: z.number().optional(),
+      distanceKm: z.number().optional(),
+      updatedAt: z.any().optional(),
+    })
+    .optional(),
+  dealerSnapshot: z.any().optional(),
+});
+
+export const DealerLocationUpdateSchema = z.object({
+  orderId: z.string().optional(),
+  dealerId: z.string(),
+  coordinates: z.tuple([z.number(), z.number()]), // [lng, lat]
+  heading: z.number().optional(),
+  speed: z.number().optional(),
+});
+
+export const DealerOtpVerifySchema = z.object({
+  orderId: z.string(),
+  dealerId: z.string(),
+  otp: z.string().length(4, 'OTP must be 4 digits'),
+});
+
+export class InternalDealerController {
+  /**
+   * Dealer transitions order status (e.g. ACCEPTED, DEALER_EN_ROUTE, ARRIVED, COMPLETED, REJECTED)
+   */
+  static async updateStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { orderId, status, note, finalWeights, finalTotalAmount, scrapPhoto, dealerLocation, dealerSnapshot } = req.body;
+
+      const order = await OrderService.transitionStatus(orderId, status, {
+        updatedBy: 'DEALER',
+        note,
+        finalWeights,
+        finalTotalAmount,
+        scrapPhoto,
+        dealerLocation,
+        dealerSnapshot,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `Order status updated to ${status}`,
+        data: order,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message || 'Failed to update order status',
+      });
+    }
+  }
+
+  /**
+   * Dealer pushes live GPS location
+   */
+  static async updateLocation(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { orderId, dealerId, coordinates, heading, speed } = req.body;
+
+      // Update dealer snapshot location in background without blocking live order dispatch
+      DealerGatewayService.updateDealerLocation(dealerId, coordinates[0], coordinates[1]).catch((err) =>
+        console.warn('Background dealer snapshot location update warning:', err.message)
+      );
+
+      if (orderId) {
+        const order = await OrderService.updateDealerLiveLocation(
+          orderId,
+          coordinates,
+          heading,
+          speed
+        );
+        res.status(200).json({
+          success: true,
+          message: 'Live location updated for order',
+          data: order.dealerLiveLocation,
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Dealer location updated',
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message || 'Failed to update location',
+      });
+    }
+  }
+
+  /**
+   * Dealer submits OTP verification for pickup
+   */
+  static async verifyOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { orderId, otp } = req.body;
+      const order = await OrderService.verifyPickupOtp(orderId, otp);
+
+      res.status(200).json({
+        success: true,
+        message: 'OTP verified successfully. Scrap collection can begin.',
+        data: {
+          orderId: order.orderId,
+          status: order.status,
+          isVerified: order.otp.isVerified,
+          verifiedAt: order.otp.verifiedAt,
+        },
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message || 'OTP verification failed',
+      });
+    }
+  }
+
+  /**
+   * Dealer presence update (online/offline status, location, profile changes)
+   */
+  static async updateDealerPresence(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    try {
+      const {
+        dealerId,
+        phone,
+        businessName,
+        contactPerson,
+        profileImage,
+        isOnline,
+        isAvailable,
+        rating,
+        totalRatings,
+        location,
+        vehicleType,
+        vehicleNumber,
+        scrapRates,
+        activeRadiusKm,
+      } = req.body;
+
+      const onlineStatus = isOnline !== undefined ? Boolean(isOnline) : true;
+      const availabilityStatus = isAvailable !== undefined ? Boolean(isAvailable) : onlineStatus;
+
+      const updateData: any = {
+        isAvailable: availabilityStatus,
+        lastActiveAt: new Date(),
+      };
+
+      if (phone) updateData.phone = phone;
+      if (businessName) updateData.businessName = businessName;
+      if (contactPerson) updateData.contactPerson = contactPerson;
+      if (profileImage !== undefined) updateData.profileImage = profileImage;
+      if (rating !== undefined) updateData.rating = rating;
+      if (totalRatings !== undefined) updateData.totalRatings = totalRatings;
+      if (vehicleType) updateData.vehicleType = vehicleType;
+      if (vehicleNumber) updateData.vehicleNumber = vehicleNumber;
+      if (scrapRates) updateData.scrapRates = scrapRates;
+      if (activeRadiusKm) updateData.activeRadiusKm = activeRadiusKm;
+
+      if (location?.coordinates && Array.isArray(location.coordinates) && location.coordinates.length === 2) {
+        updateData.location = {
+          type: 'Point',
+          coordinates: location.coordinates,
+        };
+        if (location.address) {
+          updateData.address = location.address;
+        }
+      }
+
+      const updatedSnapshot = await DealerSnapshot.findOneAndUpdate(
+        { dealerId },
+        {
+          $set: updateData,
+          $setOnInsert: {
+            dealerId,
+            phone: phone || '+91 98765 43210',
+            businessName: businessName || 'Partner Scrap Dealer',
+            contactPerson: contactPerson || 'Partner Dealer',
+            profileImage: profileImage || '',
+            rating: rating || 4.9,
+            totalRatings: totalRatings || 142,
+            location: {
+              type: 'Point',
+              coordinates: location?.coordinates || [77.2150, 28.6250],
+            },
+            address: location?.address || 'Pickup Service Area',
+            vehicleType: vehicleType || 'Electric Scrap Loader',
+            vehicleNumber: vehicleNumber || 'DL-01-EV-9821',
+            activeRadiusKm: activeRadiusKm || 15,
+            scrapRates: scrapRates || [],
+          },
+        },
+        { upsert: true, new: true }
+      );
+
+      // Backfill active order snapshot if dealer updated their profile image or info
+      if (profileImage) {
+        await Order.updateMany(
+          { dealerId, status: { $in: ['PENDING', 'ACCEPTED', 'DEALER_EN_ROUTE', 'ARRIVED', 'OTP_PENDING'] } },
+          { $set: { 'dealerSnapshot.profileImage': profileImage } }
+        );
+      }
+
+      // Real-time broadcast to all consumer WebSocket listeners
+      socketEvents.emitDealerStatusUpdate(dealerId, onlineStatus, {
+        dealer: updatedSnapshot,
+        location: updatedSnapshot.location,
+        isOnline: onlineStatus,
+        isAvailable: availabilityStatus,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `Dealer presence synchronized: ${onlineStatus ? 'ONLINE' : 'OFFLINE'}`,
+        data: {
+          dealerId,
+          isOnline: onlineStatus,
+          isAvailable: availabilityStatus,
+          dealer: updatedSnapshot,
+        },
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message || 'Failed to update dealer presence',
+      });
+    }
+  }
+
+  /**
+   * Handle incoming chat message from dealer app forward
+   */
+  static async handleDealerChatMessage(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    try {
+      const { orderId, dealerId, message } = req.body;
+      const order = await Order.findOne({ orderId });
+      if (!order) {
+        res.status(404).json({ success: false, message: 'Order not found' });
+        return;
+      }
+
+      const msgObj = {
+        id: message.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+        sender: 'dealer' as const,
+        senderName: message.senderName || order.dealerSnapshot?.contactPerson || 'Dealer Partner',
+        text: message.text,
+        timestamp: message.timestamp ? new Date(message.timestamp) : new Date(),
+      };
+
+      if (!order.chatMessages) {
+        order.chatMessages = [];
+      }
+
+      if (!order.chatMessages.some((m) => m.id === msgObj.id)) {
+        order.chatMessages.push(msgObj);
+        await order.save();
+      }
+
+      // Broadcast to consumer socket room
+      socketEvents.emitChatMessage(order.orderId, order.consumerId.toString(), {
+        ...msgObj,
+        orderId: order.orderId,
+        formattedTime: msgObj.timestamp.toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'Asia/Kolkata',
+        }),
+      });
+
+      res.status(200).json({ success: true, message: 'Chat message received and broadcasted', data: msgObj });
+    } catch (error: any) {
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * Recycler / Partner adds or updates a recycled product to the consumer store
+   */
+  static async syncRecycledProduct(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    try {
+      const product = await StoreService.listOrUpdateProduct(req.body);
+      res.status(201).json({
+        success: true,
+        message: 'Recycled product synced and published to consumer marketplace',
+        data: product,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message || 'Failed to sync recycled product',
+      });
+    }
+  }
+}
