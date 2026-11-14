@@ -121,7 +121,12 @@ export const ActiveOrderScreen: React.FC = () => {
   }
 
   const handleCancel = async () => {
-    if (window.confirm('Are you sure you want to cancel this scrap pickup request?')) {
+    const isEnRoute = ['ACCEPTED', 'DEALER_EN_ROUTE', 'ARRIVED'].includes(order.status);
+    const confirmPrompt = isEnRoute
+      ? '⚠️ Warning: The dealer has already accepted and may be en route. Cancelling mid-trip applies a reliability penalty to your seller rating and may trigger a temporary booking cooldown. Are you sure you want to cancel?'
+      : 'Are you sure you want to cancel this scrap pickup request?';
+
+    if (window.confirm(confirmPrompt)) {
       setIsCancelling(true);
       try {
         const updated = await cancelOrder(order.orderId, 'Cancelled by consumer');

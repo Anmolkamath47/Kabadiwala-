@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { UserService } from '../services/userService.js';
+import { UserReliabilityService } from '../services/userReliabilityService.js';
 import { AuthenticatedRequest } from '../middleware/authMiddleware.js';
 
 export const UpdateProfileSchema = z.object({
@@ -25,6 +26,19 @@ export const SavedLocationSchema = z.object({
 });
 
 export class UserController {
+  static async getReliabilityReport(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const report = await UserReliabilityService.getUserReliabilityReport((req.user!._id as any).toString());
+      if (!report) {
+        res.status(404).json({ success: false, message: 'User not found' });
+        return;
+      }
+      res.status(200).json({ success: true, data: report });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async getProfile(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const user = await UserService.getProfile((req.user!._id as any).toString());

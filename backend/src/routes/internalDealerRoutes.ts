@@ -50,4 +50,9 @@ router.post(
   InternalDealerController.syncRecycledProduct
 );
 
+router.post(
+  '/rate-consumer',
+  InternalDealerController.rateConsumer
+);
+
 export default router;

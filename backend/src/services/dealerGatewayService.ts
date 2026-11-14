@@ -200,7 +200,15 @@ export class DealerGatewayService {
    */
   static async notifyDealerNewPickup(
     order: any,
-    customerUser?: { name?: string; phone: string }
+    customerUser?: {
+      name?: string;
+      phone: string;
+      starRating?: number;
+      trustScore?: number;
+      trustTier?: string;
+      completedOrders?: number;
+      cancellationRate?: number;
+    }
   ): Promise<boolean> {
     try {
       await axios.post(
@@ -218,6 +226,13 @@ export class DealerGatewayService {
           otpCode: order.otp?.code,
           scrapPhoto: order.scrapPhoto,
           notes: order.notes,
+          customerReliability: {
+            starRating: customerUser?.starRating ?? 5.0,
+            trustScore: customerUser?.trustScore ?? 100,
+            trustTier: customerUser?.trustTier || 'EXCELLENT',
+            completedOrders: customerUser?.completedOrders || 0,
+            cancellationRate: customerUser?.cancellationRate || 0,
+          },
         },
         {
           headers: this.getHeaders(),

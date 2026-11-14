@@ -12,6 +12,7 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/profile', UserController.getProfile);
+router.get('/reliability', UserController.getReliabilityReport);
 router.patch('/profile', validateRequest(UpdateProfileSchema), UserController.updateProfile);
 router.get('/locations', UserController.getSavedLocations);
 router.post('/locations', validateRequest(SavedLocationSchema), UserController.addSavedLocation);

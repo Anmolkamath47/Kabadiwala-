@@ -24,6 +24,10 @@ import {
   Loader2,
   Coins,
   ShoppingBag,
+  Star,
+  AlertTriangle,
+  Clock,
+  TrendingUp,
 } from 'lucide-react';
 
 export const ProfileScreen: React.FC = () => {
@@ -257,6 +261,118 @@ export const ProfileScreen: React.FC = () => {
               Active
             </span>
           </div>
+        </div>
+
+        {/* Customer Reliability & Trust Rating Card */}
+        <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-card space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center font-bold">
+                <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
+              </div>
+              <div>
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                  Seller Reliability & Trust
+                </h3>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Based on completed pickups & order history
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-base font-black text-slate-900">
+                {(user?.starRating ?? 5.0).toFixed(1)}
+              </span>
+              <span className="text-xs text-amber-500 font-bold ml-0.5">★</span>
+            </div>
+          </div>
+
+          {/* Trust Score & Tier Progress Bar */}
+          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold">
+              <span className="text-slate-600 flex items-center space-x-1">
+                <span>Trust Score:</span>
+                <span className="text-slate-900 font-extrabold">{user?.trustScore ?? 100}/100</span>
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                  (user?.trustScore ?? 100) >= 85
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : (user?.trustScore ?? 100) >= 70
+                    ? 'bg-blue-100 text-blue-800'
+                    : (user?.trustScore ?? 100) >= 50
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-rose-100 text-rose-800'
+                }`}
+              >
+                {(user?.trustScore ?? 100) >= 85
+                  ? '🛡️ Top-Tier Trusted'
+                  : (user?.trustScore ?? 100) >= 70
+                  ? '⭐ Reliable Seller'
+                  : (user?.trustScore ?? 100) >= 50
+                  ? '⚠️ Under Warning'
+                  : '🚫 Restricted'}
+              </span>
+            </div>
+
+            {/* Score Track */}
+            <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  (user?.trustScore ?? 100) >= 85
+                    ? 'bg-emerald-500'
+                    : (user?.trustScore ?? 100) >= 70
+                    ? 'bg-blue-500'
+                    : (user?.trustScore ?? 100) >= 50
+                    ? 'bg-amber-500'
+                    : 'bg-rose-500'
+                }`}
+                style={{ width: `${Math.max(5, user?.trustScore ?? 100)}%` }}
+              />
+            </div>
+
+            {/* Micro Stats Grid */}
+            <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+              <div className="bg-white p-2 rounded-xl border border-slate-100">
+                <span className="block text-xs font-black text-emerald-600">
+                  {user?.completedOrders ?? 0}
+                </span>
+                <span className="text-[10px] text-slate-400 font-semibold">Completed</span>
+              </div>
+              <div className="bg-white p-2 rounded-xl border border-slate-100">
+                <span className="block text-xs font-black text-rose-600">
+                  {user?.cancelledOrders ?? 0}
+                </span>
+                <span className="text-[10px] text-slate-400 font-semibold">Cancelled</span>
+              </div>
+              <div className="bg-white p-2 rounded-xl border border-slate-100">
+                <span className="block text-xs font-black text-slate-800">
+                  {user?.totalOrders
+                    ? Math.round(((user.completedOrders || 0) / user.totalOrders) * 100)
+                    : 100}%
+                </span>
+                <span className="text-[10px] text-slate-400 font-semibold">Success Rate</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Cooldown Alert if active */}
+          {user?.bookingCooldownUntil && new Date(user.bookingCooldownUntil) > new Date() && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start space-x-2 text-rose-800 text-xs">
+              <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Booking Temporarily Paused</p>
+                <p className="text-[11px] text-rose-700 mt-0.5">
+                  Due to multiple cancellations, booking is paused until{' '}
+                  {new Date(user.bookingCooldownUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
+            💡 <strong className="text-slate-600">Anti-Spam Policy:</strong> Cancelling while dealer is en route incurs a 15-pt reliability penalty. Completed pickups boost score (+6 pts) and earn 10% rewards coins.
+          </p>
         </div>
 
         {/* Saved Addresses Section */}

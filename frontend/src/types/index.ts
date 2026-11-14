@@ -52,6 +52,14 @@ export interface UserProfile {
     coordinates: [number, number]; // [lng, lat]
     address?: string;
   };
+  trustScore?: number;
+  starRating?: number;
+  totalOrders?: number;
+  completedOrders?: number;
+  cancelledOrders?: number;
+  cancellationRate?: number;
+  trustTier?: 'EXCELLENT' | 'GOOD' | 'WARNING' | 'RESTRICTED';
+  bookingCooldownUntil?: string | null;
 }
 
 export interface Dealer {

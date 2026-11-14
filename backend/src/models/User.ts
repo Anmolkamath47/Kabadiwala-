@@ -1,6 +1,15 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import { SavedAddress } from '../types/index.js';
 
+export type TrustTier = 'EXCELLENT' | 'GOOD' | 'WARNING' | 'RESTRICTED';
+
+export interface IUserCancellationRecord {
+  orderId: string;
+  cancelledAt: Date;
+  orderStatusAtCancellation: string;
+  reason?: string;
+}
+
 export interface IUser extends Document {
   phone: string;
   name?: string;
@@ -15,6 +24,18 @@ export interface IUser extends Document {
   };
   isActive: boolean;
   refreshTokenHash?: string;
+  // User Reliability & Rating System
+  trustScore: number;
+  starRating: number;
+  totalOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  cancellationRate: number;
+  recentCancellations: IUserCancellationRecord[];
+  bookingCooldownUntil?: Date | null;
+  trustTier: TrustTier;
+  dealerRatingsCount: number;
+  dealerRatingsTotal: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -84,6 +105,60 @@ const UserSchema = new Schema<IUser>(
     },
     refreshTokenHash: {
       type: String,
+    },
+    // User Reliability & Rating System
+    trustScore: {
+      type: Number,
+      default: 100,
+      min: 0,
+      max: 100,
+    },
+    starRating: {
+      type: Number,
+      default: 5.0,
+      min: 1.0,
+      max: 5.0,
+    },
+    totalOrders: {
+      type: Number,
+      default: 0,
+    },
+    completedOrders: {
+      type: Number,
+      default: 0,
+    },
+    cancelledOrders: {
+      type: Number,
+      default: 0,
+    },
+    cancellationRate: {
+      type: Number,
+      default: 0,
+    },
+    recentCancellations: [
+      {
+        orderId: { type: String, required: true },
+        cancelledAt: { type: Date, default: Date.now },
+        orderStatusAtCancellation: { type: String, default: 'PENDING' },
+        reason: { type: String, default: '' },
+      },
+    ],
+    bookingCooldownUntil: {
+      type: Date,
+      default: null,
+    },
+    trustTier: {
+      type: String,
+      enum: ['EXCELLENT', 'GOOD', 'WARNING', 'RESTRICTED'],
+      default: 'EXCELLENT',
+    },
+    dealerRatingsCount: {
+      type: Number,
+      default: 0,
+    },
+    dealerRatingsTotal: {
+      type: Number,
+      default: 0,
     },
   },
   {

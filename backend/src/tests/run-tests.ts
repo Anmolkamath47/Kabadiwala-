@@ -358,6 +358,12 @@ async function runTestSuite() {
     passedTests += rateLimitResults.passed;
     totalTests += rateLimitResults.total;
 
+    // 11. User Reliability, Trust Rating & Anti-Spam Shield Tests
+    const { runUserReliabilityTests } = await import('./user-reliability.test.js');
+    const reliabilityResults = await runUserReliabilityTests();
+    passedTests += reliabilityResults.passed;
+    totalTests += reliabilityResults.total;
+
     console.log('\n========================================================');
     console.log(`📊 TEST SUMMARY: ${passedTests} / ${totalTests} TESTS PASSED`);
     console.log('========================================================\n');

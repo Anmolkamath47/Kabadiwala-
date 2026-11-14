@@ -7,6 +7,7 @@ import { generateOrderOtp } from '../utils/otp.js';
 import { calculateDistanceKm, estimateEtaMinutes } from '../utils/geo.js';
 import { socketEvents } from '../sockets/socketManager.js';
 import { WalletService } from './walletService.js';
+import { UserReliabilityService } from './userReliabilityService.js';
 import {
   OrderStatus,
   SelectedMaterialItem,
@@ -56,6 +57,9 @@ export class OrderService {
       notes?: string;
     }
   ): Promise<IOrder> {
+    // 0. Enforce Customer Reliability & Anti-Spam Policy (Cooldown & Concurrent Orders)
+    await UserReliabilityService.checkBookingEligibility(consumerId);
+
     // 1. Fetch dealer snapshot via DealerGatewayService (HTTP to Kabadidealer with local fallback)
     const dealer = await DealerGatewayService.getDealerById(data.dealerId);
     if (!dealer) {
@@ -163,14 +167,22 @@ export class OrderService {
       notes: data.notes,
     });
 
-    // 5. Forward pickup notification to Kabadidealer partner backend via REST
+    // 5. Update user total orders count
+    await UserReliabilityService.onOrderCreated(consumerId);
+
+    // 6. Forward pickup notification to Kabadidealer partner backend via REST
     const user = await User.findById(consumerId).lean();
     await DealerGatewayService.notifyDealerNewPickup(order, {
       name: user?.name,
       phone: user?.phone || '+91 98765 43210',
+      starRating: user?.starRating ?? 5.0,
+      trustScore: user?.trustScore ?? 100,
+      trustTier: user?.trustTier || 'EXCELLENT',
+      completedOrders: user?.completedOrders || 0,
+      cancellationRate: user?.cancellationRate || 0,
     });
 
-    // 6. Broadcast real-time urgent alert to dealer socket room
+    // 7. Broadcast real-time urgent alert to dealer socket room
     socketEvents.emitNewPickupAlert(dealer.dealerId, order);
 
     return order;
@@ -239,6 +251,20 @@ export class OrderService {
       order.cancellationReason = options.cancellationReason || 'Cancelled by user';
       order.cancelledBy = options.updatedBy || 'CONSUMER';
 
+      // Update User Reliability & Anti-Abuse Shield
+      if (order.cancelledBy === 'CONSUMER') {
+        try {
+          await UserReliabilityService.onOrderCancelled(
+            order.consumerId.toString(),
+            order.orderId,
+            currentStatus,
+            order.cancellationReason
+          );
+        } catch (err: any) {
+          console.warn('⚠️ [OrderService] Failed to update user reliability on cancellation:', err.message);
+        }
+      }
+
       // Forward cancellation to Kabadidealer partner backend
       if (order.dealerId) {
         DealerGatewayService.notifyOrderCancelled(order.orderId, order.dealerId, {
@@ -249,6 +275,12 @@ export class OrderService {
     }
 
     if (newStatus === 'COMPLETED') {
+      try {
+        await UserReliabilityService.onOrderCompleted(order.consumerId.toString());
+      } catch (err: any) {
+        console.warn('⚠️ [OrderService] Failed to update user reliability on order completion:', err.message);
+      }
+
       if (options.scrapPhoto) {
         order.scrapPhoto = options.scrapPhoto;
       }

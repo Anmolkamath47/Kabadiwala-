@@ -6,6 +6,7 @@ import { DealerSnapshot } from '../models/DealerSnapshot.js';
 import { Order } from '../models/Order.js';
 import { socketEvents } from '../sockets/socketManager.js';
 import { StoreService } from '../services/storeService.js';
+import { UserReliabilityService } from '../services/userReliabilityService.js';
 
 export const DealerPresenceSchema = z.object({
   dealerId: z.string(),
@@ -345,6 +346,39 @@ export class InternalDealerController {
       res.status(400).json({
         success: false,
         message: error.message || 'Failed to sync recycled product',
+      });
+    }
+  }
+
+  /**
+   * Dealer rates the consumer after order completion or doorstep cancellation
+   */
+  static async rateConsumer(req: Request, res: Response, _next: NextFunction): Promise<void> {
+    try {
+      const { consumerId, score, feedback, tags } = req.body;
+      if (!consumerId || !score) {
+        res.status(400).json({ success: false, message: 'consumerId and score (1-5) are required' });
+        return;
+      }
+      const updatedUser = await UserReliabilityService.addDealerRatingToConsumer(
+        consumerId,
+        score,
+        feedback,
+        tags
+      );
+      res.status(200).json({
+        success: true,
+        message: 'Dealer rating for consumer recorded successfully',
+        data: {
+          starRating: updatedUser?.starRating,
+          trustScore: updatedUser?.trustScore,
+          trustTier: updatedUser?.trustTier,
+        },
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: error.message || 'Failed to record dealer rating',
       });
     }
   }
