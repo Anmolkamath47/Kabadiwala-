@@ -25,6 +25,7 @@ import {
   Coins,
   ShoppingBag,
   Star,
+  MessageSquare,
   AlertTriangle,
   Clock,
   TrendingUp,
@@ -373,6 +374,112 @@ export const ProfileScreen: React.FC = () => {
           <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
             💡 <strong className="text-slate-600">Anti-Spam Policy:</strong> Cancelling while dealer is en route incurs a 15-pt reliability penalty. Completed pickups boost score (+6 pts) and earn 10% rewards coins.
           </p>
+        </div>
+
+        {/* Ratings & Reviews from Scrap Dealers */}
+        <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-card space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center font-bold">
+                <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
+              </div>
+              <div>
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                  Dealer Ratings & Reviews
+                </h3>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Verified feedback given by scrap dealers after doorstep pickups
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="flex items-center justify-end space-x-1">
+                <span className="text-base font-black text-slate-900">
+                  {(user?.starRating ?? 5.0).toFixed(1)}
+                </span>
+                <span className="text-xs text-amber-500 font-bold">★</span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-semibold block">
+                {user?.dealerRatingsCount || (user?.dealerReviews?.length ?? 0)} Review{(user?.dealerRatingsCount === 1 || user?.dealerReviews?.length === 1) ? '' : 's'}
+              </span>
+            </div>
+          </div>
+
+          {/* Review List or Empty State */}
+          {user?.dealerReviews && user.dealerReviews.length > 0 ? (
+            <div className="space-y-2.5 pt-1">
+              {user.dealerReviews.map((rev, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5 shadow-2xs"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-xs font-black text-slate-900">
+                          {rev.dealerBusinessName || rev.dealerName || 'Scrap Dealer Partner'}
+                        </span>
+                        <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-bold">
+                          Verified Hub
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400">
+                        {rev.createdAt
+                          ? new Date(rev.createdAt).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : 'Recent Pickup'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center space-x-0.5 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          className={`w-3 h-3 ${
+                            s <= rev.score ? 'text-amber-400 fill-amber-400' : 'text-slate-200'
+                          }`}
+                        />
+                      ))}
+                      <span className="text-xs font-black text-amber-800 ml-1">{rev.score}.0</span>
+                    </div>
+                  </div>
+
+                  {rev.feedback && (
+                    <div className="bg-white p-2.5 rounded-xl border border-slate-200/60 text-xs text-slate-700 italic flex items-start space-x-1.5">
+                      <MessageSquare className="w-3 h-3 text-amber-500 flex-shrink-0 mt-0.5" />
+                      <span>"{rev.feedback}"</span>
+                    </div>
+                  )}
+
+                  {rev.tags && rev.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                      {rev.tags.map((tag, tIdx) => (
+                        <span
+                          key={tIdx}
+                          className="text-[10px] font-bold bg-amber-50/80 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md"
+                        >
+                          ✓ {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-amber-50/50 border border-dashed border-amber-200 p-4 rounded-2xl text-center space-y-1.5">
+              <div className="flex items-center justify-center space-x-1 text-xs font-bold text-amber-800">
+                <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
+                <span>⭐ 5.0 Baseline Rating (New Verified Seller)</span>
+              </div>
+              <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                No dealer reviews recorded yet. Complete scrap pickups with partner dealers to receive doorstep ratings and feedback on your profile!
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Saved Addresses Section */}

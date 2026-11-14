@@ -73,7 +73,7 @@ export async function runUserReliabilityTests(): Promise<{ passed: number; total
   assert(updated.cancelledOrders === 2, 'cancelledOrders incremented to 2');
   assert(updated.trustScore === 78, 'Mid-route cancellation penalty: 96 - 18 = 78 pts');
   assert(updated.trustTier === 'GOOD', 'Trust tier dropped to GOOD (70-84 pts)');
-  assert(updated.starRating < 5.0, `Star rating dropped proportionally (${updated.starRating} < 5.0)`);
+  assert(updated.trustScore === 78, 'Trust score dropped to 78 pts after mid-route cancel');
 
   // 6. Rapid Cancellation Spam Detection (Triggers 15-minute booking cooldown)
   // Two en-route cancellations within 1 hour trigger the anti-spam freeze
@@ -146,20 +146,32 @@ export async function runUserReliabilityTests(): Promise<{ passed: number; total
   await Order.deleteOne({ orderId: 'KBD-ACTIVE-SPAM-001' });
 
   // 10. Dealer Rating of Consumer (Two-Way Rating)
-  await UserReliabilityService.addDealerRatingToConsumer(userId, 5, 'Great seller, scrap was ready', [
-    'Accurate Weight',
-    'Punctual',
-  ]);
+  await UserReliabilityService.addDealerRatingToConsumer(userId, {
+    dealerId: 'DLR-RAMESH-001',
+    dealerName: 'Ramesh Verma',
+    dealerBusinessName: 'GreenEarth Scrap Hub',
+    score: 4,
+    feedback: 'Great seller, scrap was segregated and ready',
+    tags: ['Accurate Weight', 'Punctual & Responsive'],
+    orderId: 'ORD-TEST-REV-001',
+  });
   updated = (await User.findById(userId)) as IUser;
   assert(updated.dealerRatingsCount === 1, 'Dealer rating recorded for consumer');
-  assert(updated.dealerRatingsTotal === 5, 'Dealer rating total is 5');
+  assert(updated.dealerRatingsTotal === 4, 'Dealer rating total is 4');
+  assert(updated.starRating === 4.0, 'Consumer star rating updated directly to 4.0 from dealer review');
+  assert(updated.dealerReviews.length === 1, 'Dealer review stored in consumer dealerReviews array');
+  assert(
+    updated.dealerReviews[0].dealerBusinessName === 'GreenEarth Scrap Hub',
+    'Dealer business hub name preserved in review'
+  );
 
   // 11. Full Reliability Report Generation
   const report = await UserReliabilityService.getUserReliabilityReport(userId);
   assert(report !== null, 'Reliability report generated successfully');
   assert(report?.userId === userId, 'Report matches target user ID');
   assert(typeof report?.trustScore === 'number', 'Report contains numeric trust score');
-  assert(typeof report?.starRating === 'number', 'Report contains numeric star rating');
+  assert(report?.starRating === 4.0, 'Report contains updated dealer star rating (4.0)');
+  assert(report?.dealerReviews.length === 1, 'Report includes full dealer reviews list for profile');
   assert(report?.tierLabel.length! > 0, 'Report includes user-friendly tier label');
   assert(report?.policyGuidelines.length === 4, 'Report includes clear fair-use policy guidelines');
 

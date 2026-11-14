@@ -22,6 +22,16 @@ export interface UserReliabilityReport {
     count: number;
     averageScore: number;
   };
+  dealerReviews: Array<{
+    dealerId: string;
+    dealerName?: string;
+    dealerBusinessName?: string;
+    score: number;
+    feedback?: string;
+    tags?: string[];
+    orderId: string;
+    createdAt: Date;
+  }>;
   policyGuidelines: string[];
 }
 
@@ -169,15 +179,59 @@ export class UserReliabilityService {
    */
   static async addDealerRatingToConsumer(
     userId: string,
-    score: number,
-    _feedback?: string,
-    _tags?: string[]
+    ratingData: {
+      dealerId: string;
+      dealerName?: string;
+      dealerBusinessName?: string;
+      score: number;
+      feedback?: string;
+      tags?: string[];
+      orderId?: string;
+    } | number,
+    legacyFeedback?: string,
+    legacyTags?: string[]
   ): Promise<IUser | null> {
     const user = await User.findById(userId);
     if (!user) return null;
 
+    let score: number;
+    let dealerId = 'DLR-PARTNER';
+    let dealerName = 'Verified Partner Dealer';
+    let dealerBusinessName = 'Scrapwala Partner Hub';
+    let feedback = '';
+    let tags: string[] = [];
+    let orderId = `ORD-${Date.now()}`;
+
+    if (typeof ratingData === 'number') {
+      score = ratingData;
+      feedback = legacyFeedback || '';
+      tags = legacyTags || [];
+    } else {
+      score = ratingData.score;
+      dealerId = ratingData.dealerId || dealerId;
+      dealerName = ratingData.dealerName || dealerName;
+      dealerBusinessName = ratingData.dealerBusinessName || dealerBusinessName;
+      feedback = ratingData.feedback || '';
+      tags = ratingData.tags || [];
+      orderId = ratingData.orderId || orderId;
+    }
+
+    const cleanScore = Math.max(1, Math.min(5, Math.round(score)));
+
     user.dealerRatingsCount = (user.dealerRatingsCount || 0) + 1;
-    user.dealerRatingsTotal = (user.dealerRatingsTotal || 0) + Math.max(1, Math.min(5, score));
+    user.dealerRatingsTotal = (user.dealerRatingsTotal || 0) + cleanScore;
+
+    user.dealerReviews = user.dealerReviews || [];
+    user.dealerReviews.unshift({
+      dealerId,
+      dealerName,
+      dealerBusinessName,
+      score: cleanScore,
+      feedback,
+      tags,
+      orderId,
+      createdAt: new Date(),
+    });
 
     this.recalculateScores(user);
     await user.save();
@@ -195,15 +249,11 @@ export class UserReliabilityService {
     user.cancellationRate = total > 0 ? Math.round((cancelled / total) * 100) : 0;
 
     // Star rating (1.0 to 5.0)
-    // Combines system trust score (0-100 translated to 1-5) and dealer ratings (if any)
-    const baseScoreStar = ((user.trustScore ?? 100) / 100) * 4 + 1; // 100 -> 5.0, 50 -> 3.0, 0 -> 1.0
-
+    // Directly derived from dealer ratings if available; otherwise defaults to 5.0
     if (user.dealerRatingsCount && user.dealerRatingsCount > 0) {
-      const avgDealerRating = user.dealerRatingsTotal / user.dealerRatingsCount;
-      // 50% system order history + 50% dealer direct ratings
-      user.starRating = Math.round(((baseScoreStar * 0.5) + (avgDealerRating * 0.5)) * 10) / 10;
+      user.starRating = Math.round((user.dealerRatingsTotal / user.dealerRatingsCount) * 10) / 10;
     } else {
-      user.starRating = Math.round(baseScoreStar * 10) / 10;
+      user.starRating = 5.0; // New verified customer baseline
     }
     user.starRating = Math.max(1.0, Math.min(5.0, user.starRating));
 
@@ -277,6 +327,7 @@ export class UserReliabilityService {
             ? Math.round((user.dealerRatingsTotal / user.dealerRatingsCount) * 10) / 10
             : 5.0,
       },
+      dealerReviews: user.dealerReviews || [],
       policyGuidelines: [
         'Complete scheduled pickups to increase your Trust Score and earn 10% scrap rewards.',
         'Avoid cancelling after a dealer is en route (incurring a 15-point reliability penalty).',

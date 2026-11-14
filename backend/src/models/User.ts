@@ -10,6 +10,17 @@ export interface IUserCancellationRecord {
   reason?: string;
 }
 
+export interface IDealerReviewForConsumer {
+  dealerId: string;
+  dealerName?: string;
+  dealerBusinessName?: string;
+  score: number;
+  feedback?: string;
+  tags?: string[];
+  orderId: string;
+  createdAt: Date;
+}
+
 export interface IUser extends Document {
   phone: string;
   name?: string;
@@ -36,6 +47,7 @@ export interface IUser extends Document {
   trustTier: TrustTier;
   dealerRatingsCount: number;
   dealerRatingsTotal: number;
+  dealerReviews: IDealerReviewForConsumer[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -160,6 +172,18 @@ const UserSchema = new Schema<IUser>(
       type: Number,
       default: 0,
     },
+    dealerReviews: [
+      {
+        dealerId: { type: String, required: true },
+        dealerName: { type: String, default: 'Partner Dealer' },
+        dealerBusinessName: { type: String, default: 'Verified Scrap Hub' },
+        score: { type: Number, required: true, min: 1, max: 5 },
+        feedback: { type: String, default: '' },
+        tags: [{ type: String }],
+        orderId: { type: String, required: true },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   {
     timestamps: true,

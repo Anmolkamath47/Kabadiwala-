@@ -355,16 +355,31 @@ export class InternalDealerController {
    */
   static async rateConsumer(req: Request, res: Response, _next: NextFunction): Promise<void> {
     try {
-      const { consumerId, score, feedback, tags } = req.body;
+      const {
+        consumerId,
+        score,
+        feedback,
+        tags,
+        dealerId,
+        dealerName,
+        dealerBusinessName,
+        orderId,
+      } = req.body;
       if (!consumerId || !score) {
         res.status(400).json({ success: false, message: 'consumerId and score (1-5) are required' });
         return;
       }
       const updatedUser = await UserReliabilityService.addDealerRatingToConsumer(
         consumerId,
-        score,
-        feedback,
-        tags
+        {
+          dealerId: dealerId || 'DLR-PARTNER',
+          dealerName: dealerName || 'Verified Partner Dealer',
+          dealerBusinessName: dealerBusinessName || 'Scrap Hub Partner',
+          score: Number(score),
+          feedback,
+          tags,
+          orderId: orderId || `ORD-${Date.now()}`,
+        }
       );
       res.status(200).json({
         success: true,
@@ -373,6 +388,7 @@ export class InternalDealerController {
           starRating: updatedUser?.starRating,
           trustScore: updatedUser?.trustScore,
           trustTier: updatedUser?.trustTier,
+          dealerReviewsCount: updatedUser?.dealerReviews?.length || 0,
         },
       });
     } catch (error: any) {

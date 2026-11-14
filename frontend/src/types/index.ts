@@ -60,6 +60,18 @@ export interface UserProfile {
   cancellationRate?: number;
   trustTier?: 'EXCELLENT' | 'GOOD' | 'WARNING' | 'RESTRICTED';
   bookingCooldownUntil?: string | null;
+  dealerRatingsCount?: number;
+  dealerRatingsTotal?: number;
+  dealerReviews?: Array<{
+    dealerId: string;
+    dealerName?: string;
+    dealerBusinessName?: string;
+    score: number;
+    feedback?: string;
+    tags?: string[];
+    orderId: string;
+    createdAt: string;
+  }>;
 }
 
 export interface Dealer {
